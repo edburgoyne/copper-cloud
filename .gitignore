@@ -218,3 +218,11 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# pygbag output
+.pygbag/
+
+# Editor and operating system files
+.DS_Store
+.idea/
+.vscode/
