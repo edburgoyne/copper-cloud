@@ -221,6 +221,7 @@ __marimo__/
 
 # pygbag output
 .pygbag/
+/games/live_games/*/
 
 # Editor and operating system files
 .DS_Store

@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101410">
+  <meta name="description" content="A collection of games by Copper Cloud, playable in your browser.">
+  <title>Copper Cloud Arcade</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #101410;
+      --panel: #191f19;
+      --panel-raised: #202820;
+      --text: #f2f4ed;
+      --muted: #a4afa1;
+      --accent: #c1f075;
+      --border: rgba(224, 239, 215, .12);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(ellipse at 50% -20%, rgba(127, 177, 81, .16), transparent 55%),
+        var(--bg);
+      color: var(--text);
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    a { color: inherit; }
+
+    .shell {
+      width: min(1120px, calc(100% - 40px));
+      margin: 0 auto;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 82px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 11px;
+      font-size: 15px;
+      font-weight: 750;
+      letter-spacing: .04em;
+      text-decoration: none;
+    }
+
+    .brand-mark {
+      display: grid;
+      width: 34px;
+      height: 34px;
+      place-items: center;
+      border: 1px solid rgba(193, 240, 117, .5);
+      border-radius: 10px;
+      background: rgba(193, 240, 117, .1);
+      color: var(--accent);
+      font-size: 19px;
+    }
+
+    .header-note {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    main { padding: 78px 0 92px; }
+
+    .eyebrow {
+      margin: 0 0 16px;
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 750;
+      letter-spacing: .16em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      max-width: 720px;
+      margin: 0;
+      font-size: clamp(42px, 7vw, 76px);
+      line-height: .98;
+      letter-spacing: -.065em;
+    }
+
+    .intro {
+      max-width: 550px;
+      margin: 22px 0 0;
+      color: var(--muted);
+      font-size: 17px;
+      line-height: 1.65;
+    }
+
+    .library-heading {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 16px;
+      margin: 64px 0 20px;
+    }
+
+    h2 {
+      margin: 0;
+      font-size: 22px;
+      letter-spacing: -.03em;
+    }
+
+    .game-count {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .game-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(min(100%, 310px), 1fr));
+      gap: 22px;
+    }
+
+    .game-card {
+      overflow: hidden;
+      border: 1px solid var(--border);
+      border-radius: 17px;
+      background: var(--panel);
+      transition: transform .18s ease, border-color .18s ease, background .18s ease;
+    }
+
+    .game-card:hover {
+      transform: translateY(-4px);
+      border-color: rgba(193, 240, 117, .48);
+      background: var(--panel-raised);
+    }
+
+    .game-cover {
+      display: block;
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      object-fit: cover;
+      background: #293a26;
+    }
+
+    .game-info { padding: 18px 19px 19px; }
+
+    .game-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 9px;
+    }
+
+    .game-tag {
+      color: var(--accent);
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+
+    .game-kind {
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .game-title {
+      margin: 0;
+      font-size: 21px;
+      letter-spacing: -.035em;
+    }
+
+    .game-description {
+      min-height: 44px;
+      margin: 9px 0 18px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    .play-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 700;
+      text-decoration: none;
+    }
+
+    .play-link span:last-child {
+      color: var(--accent);
+      transition: transform .18s ease;
+    }
+
+    .play-link:hover span:last-child { transform: translateX(4px); }
+
+    footer {
+      padding: 22px 0 30px;
+      border-top: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    @media (max-width: 600px) {
+      .shell { width: min(100% - 28px, 1120px); }
+      header { min-height: 68px; }
+      .header-note { font-size: 11px; }
+      main { padding: 58px 0 68px; }
+      .intro { font-size: 15px; }
+      .library-heading { margin-top: 48px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header>
+      <a class="brand" href="./" aria-label="Copper Cloud Arcade home">
+        <span class="brand-mark" aria-hidden="true">◆</span>
+        <span>COPPER CLOUD</span>
+      </a>
+      <span class="header-note">Small games, ready to play</span>
+    </header>
+
+    <main>
+      <section aria-labelledby="page-title">
+        <p class="eyebrow">The game shelf</p>
+        <h1 id="page-title">Pick a game.<br>Jump right in.</h1>
+        <p class="intro">A growing collection of games made to play in your browser. Choose a tile to open a game.</p>
+      </section>
+
+      <section aria-labelledby="library-title">
+        <div class="library-heading">
+          <h2 id="library-title">Available games</h2>
+          <span class="game-count">2 games</span>
+        </div>
+
+        <div class="game-grid">
+          <!-- Add a game: copy one .game-card, change its href, image src/alt, title, tag, type, and description. Update the count above too. -->
+          <article class="game-card">
+            <a href="./games/live_games/battle-royale/" aria-label="Play Battle Royale Mini">
+              <img class="game-cover" src="./site-assets/battle-royale-mini.svg" alt="Top-down arena with a shrinking purple storm and fighters">
+            </a>
+            <div class="game-info">
+              <div class="game-meta">
+                <span class="game-tag">Featured</span>
+                <span class="game-kind">Survival shooter</span>
+              </div>
+              <h3 class="game-title">Battle Royale Mini</h3>
+              <p class="game-description">Outlast the bots, collect loot, and stay inside the shrinking storm.</p>
+              <a class="play-link" href="./games/live_games/battle-royale/">
+                <span>Play game</span><span aria-hidden="true">→</span>
+              </a>
+            </div>
+          </article>
+
+          <article class="game-card">
+            <a href="./games/live_games/dino-runner/" aria-label="Play Dino Game">
+              <img class="game-cover" src="./site-assets/dino-runner.svg" alt="A pixel-style dinosaur jumping over a cactus on a bright desert track">
+            </a>
+            <div class="game-info">
+              <div class="game-meta">
+                <span class="game-tag">New</span>
+                <span class="game-kind">Endless runner</span>
+              </div>
+              <h3 class="game-title">Dino Game</h3>
+              <p class="game-description">Jump over cacti, keep moving, and see how long you can last.</p>
+              <a class="play-link" href="./games/live_games/dino-runner/">
+                <span>Play game</span><span aria-hidden="true">→</span>
+              </a>
+            </div>
+          </article>
+        </div>
+      </section>
+    </main>
+
+    <footer>© <span id="year">2026</span> Copper Cloud Arcade</footer>
+  </div>
+</body>
+</html>

@@ -19,10 +19,9 @@ Install pygame first if you don't have it:
     pip install pygame
 
 Then run:
-    python battle_royale_mini.py
+    python battle_royale.py
 """
 
-import asyncio
 import pygame
 import random
 import math
@@ -673,7 +672,7 @@ def draw_menu(surface):
 game_state = "menu"
 frame_count = 0
 
-async def main():
+def main():
     global game_state, frame_count, storm_timer, storm_radius
 
     running = True
@@ -835,9 +834,9 @@ async def main():
                 draw_end_screen(screen, "ELIMINATED", RED)
 
         pygame.display.flip()
-        await asyncio.sleep(0)
 
     pygame.quit()
 
 
-asyncio.run(main())
+if __name__ == "__main__":
+    main()

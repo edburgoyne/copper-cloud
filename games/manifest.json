@@ -1,0 +1,12 @@
+[
+  {
+    "slug": "battle-royale",
+    "source": "games/live_games/battle_royale.py",
+    "assets": "games/assets/battle-royale"
+  },
+  {
+    "slug": "dino-runner",
+    "source": "games/live_games/dino_game.py",
+    "assets": "games/assets/dino-runner"
+  }
+]
