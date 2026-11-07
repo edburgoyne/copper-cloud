@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540" role="img" aria-labelledby="title desc">
+  <title id="title">Dino Game cover</title>
+  <desc id="desc">A dark dinosaur leaps over green cacti across a warm desert track.</desc>
+  <defs>
+    <linearGradient id="sky" x2="0" y2="1">
+      <stop stop-color="#f8d98e"/>
+      <stop offset="1" stop-color="#f1a95e"/>
+    </linearGradient>
+    <linearGradient id="ground" x2="0" y2="1">
+      <stop stop-color="#6d6047"/>
+      <stop offset="1" stop-color="#36352e"/>
+    </linearGradient>
+    <linearGradient id="shade" x2="0" y2="1">
+      <stop stop-color="#171b18" stop-opacity="0"/>
+      <stop offset="1" stop-color="#171b18" stop-opacity=".9"/>
+    </linearGradient>
+  </defs>
+  <rect width="960" height="540" fill="url(#sky)"/>
+  <circle cx="760" cy="119" r="53" fill="#fff3c6" fill-opacity=".82"/>
+  <g fill="#fff5d8" fill-opacity=".48">
+    <ellipse cx="183" cy="126" rx="73" ry="16"/><ellipse cx="220" cy="117" rx="43" ry="18"/>
+    <ellipse cx="470" cy="179" rx="69" ry="13"/><ellipse cx="499" cy="170" rx="37" ry="16"/>
+  </g>
+  <path d="M0 325q180-36 354 0t330 0q133-30 276-3v218H0z" fill="#d99b58" fill-opacity=".48"/>
+  <rect y="374" width="960" height="166" fill="url(#ground)"/>
+  <path d="M0 374h960" stroke="#423d32" stroke-width="8"/>
+  <g fill="#a98e69" opacity=".85">
+    <path d="M95 422h74v8H95zm214 52h106v8H309zm440-40h83v8h-83z"/>
+  </g>
+  <g fill="#347451" stroke="#1c4a38" stroke-width="7" stroke-linejoin="round">
+    <path d="M714 373v-61q0-18 17-18t17 18v21h19v-12q0-17 16-17t16 17v52z"/>
+    <path d="M831 373v-45q0-15 14-15t14 15v11h17v-24q0-17 16-17t16 17v58z"/>
+  </g>
+  <g fill="#171d1a" stroke="#0d1210" stroke-width="5" stroke-linejoin="round">
+    <path d="m202 337 29-19 28 2 17-20 23 5 9 22 24 5 7 30-18 12-13 28h-22l-8-29h-30l-15 27h-23l8-42-29-3z"/>
+    <path d="m290 296 13-29 9 33z"/>
+  </g>
+  <circle cx="301" cy="314" r="4.5" fill="#fff6dd"/>
+  <rect width="960" height="540" fill="url(#shade)"/>
+  <g font-family="system-ui, sans-serif" font-weight="800">
+    <text x="54" y="438" fill="#ffd77e" font-size="18" letter-spacing="5">KEEP RUNNING</text>
+    <text x="50" y="493" fill="#fffaf0" font-size="52" letter-spacing="-2">DINO GAME</text>
+  </g>
+</svg>
