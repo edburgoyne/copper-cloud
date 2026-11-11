@@ -241,49 +241,84 @@
       <section aria-labelledby="library-title">
         <div class="library-heading">
           <h2 id="library-title">Available games</h2>
-          <span class="game-count">2 games</span>
+          <span class="game-count" aria-live="polite">Loading games...</span>
         </div>
 
-        <div class="game-grid">
-          <!-- Add a game: copy one .game-card, change its href, image src/alt, title, tag, type, and description. Update the count above too. -->
-          <article class="game-card">
-            <a href="./games/live_games/battle-royale/" aria-label="Play Battle Royale Mini">
-              <img class="game-cover" src="./site-assets/battle-royale-mini.svg" alt="Top-down arena with a shrinking purple storm and fighters">
-            </a>
-            <div class="game-info">
-              <div class="game-meta">
-                <span class="game-tag">Featured</span>
-                <span class="game-kind">Survival shooter</span>
-              </div>
-              <h3 class="game-title">Battle Royale Mini</h3>
-              <p class="game-description">Outlast the bots, collect loot, and stay inside the shrinking storm.</p>
-              <a class="play-link" href="./games/live_games/battle-royale/">
-                <span>Play game</span><span aria-hidden="true">→</span>
-              </a>
-            </div>
-          </article>
-
-          <article class="game-card">
-            <a href="./games/live_games/dino-runner/" aria-label="Play Dino Game">
-              <img class="game-cover" src="./site-assets/dino-runner.svg" alt="A pixel-style dinosaur jumping over a cactus on a bright desert track">
-            </a>
-            <div class="game-info">
-              <div class="game-meta">
-                <span class="game-tag">New</span>
-                <span class="game-kind">Endless runner</span>
-              </div>
-              <h3 class="game-title">Dino Game</h3>
-              <p class="game-description">Jump over cacti, keep moving, and see how long you can last.</p>
-              <a class="play-link" href="./games/live_games/dino-runner/">
-                <span>Play game</span><span aria-hidden="true">→</span>
-              </a>
-            </div>
-          </article>
-        </div>
+        <div class="game-grid" id="game-grid" aria-live="polite"></div>
+        <p class="game-count" id="game-load-error" role="status" hidden></p>
       </section>
     </main>
 
     <footer>© <span id="year">2026</span> Copper Cloud Arcade</footer>
   </div>
+  <script>
+    const gameGrid = document.querySelector("#game-grid");
+    const gameCount = document.querySelector(".game-count");
+    const gameLoadError = document.querySelector("#game-load-error");
+
+    function createGameCard(game) {
+      const card = document.createElement("article");
+      card.className = "game-card";
+
+      const coverLink = document.createElement("a");
+      coverLink.href = game.url;
+      coverLink.setAttribute("aria-label", `Play ${game.title}`);
+
+      const cover = document.createElement("img");
+      cover.className = "game-cover";
+      cover.src = game.thumbnail;
+      cover.alt = game.thumbnail_alt;
+      coverLink.append(cover);
+
+      const info = document.createElement("div");
+      info.className = "game-info";
+      const meta = document.createElement("div");
+      meta.className = "game-meta";
+      const tag = document.createElement("span");
+      tag.className = "game-tag";
+      tag.textContent = game.featured ? "Featured" : game.category;
+      const category = document.createElement("span");
+      category.className = "game-kind";
+      category.textContent = game.category;
+      meta.append(tag, category);
+
+      const title = document.createElement("h3");
+      title.className = "game-title";
+      title.textContent = game.title;
+      const description = document.createElement("p");
+      description.className = "game-description";
+      description.textContent = game.description;
+
+      const playLink = document.createElement("a");
+      playLink.className = "play-link";
+      playLink.href = game.url;
+      playLink.append(document.createTextNode("Play game "));
+      const arrow = document.createElement("span");
+      arrow.setAttribute("aria-hidden", "true");
+      arrow.textContent = String.fromCodePoint(8594);
+      playLink.append(arrow);
+
+      info.append(meta, title, description, playLink);
+      card.append(coverLink, info);
+      return card;
+    }
+
+    fetch("./games.json", { cache: "no-cache"})
+      .then((response) => {
+        if (!response.ok) throw new Error(`Game list request failed (${response.status})`);
+        return response.json();
+      })
+      .then((games) => {
+        if (!Array.isArray(games)) throw new Error("Game list has an invalid format");
+        gameGrid.replaceChildren(...games.map(createGameCard));
+        gameCount.textContent = `${games.length} ${games.length === 1 ? "game" : "games"}`;
+      })
+      .catch((error) => {
+        gameCount.textContent = "Games unavailable";
+        gameLoadError.hidden = false;
+        gameLoadError.textContent = "The game list could not be loaded. Please try again later.";
+        console.error("Could not load Copper Cloud games:", error);
+      });
+  </script>
 </body>
 </html>

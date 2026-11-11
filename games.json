@@ -1,0 +1,12 @@
+[
+  {
+    "id": "battle-royale",
+    "title": "Battle Royale Mini",
+    "description": "Outlast the bots and survive the shrinking storm.",
+    "category": "Action",
+    "featured": false,
+    "thumbnail": "./games/site_games/battle-royale/thumbnail.svg",
+    "thumbnail_alt": "A top-down arena with fighters inside a shrinking purple storm.",
+    "url": "./games/live_games/battle-royale/"
+  }
+]
