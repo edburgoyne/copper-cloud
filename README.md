@@ -1,98 +1,136 @@
 # Copper Cloud Arcade
 
-A manually curated homepage for browser games. Pygame games are compiled with pygbag and published together through GitHub Pages.
+Copper Cloud hosts browser playable Pygame games. Pygbag builds each published game, and GitHub Actions assembles and publishes the static site to GitHub Pages. The game list and card metadata live in `games/manifest.json`.
 
-## Game organization
+## Project layout
 
 ```text
 copper-cloud/
 ├── games/
-│   ├── assets/
-│   │   ├── battle-royale/
-│   │   └── dino-runner/
-│   ├── in_progress/
-│   │   ├── battle_royale.py       # synchronous desktop game
-│   │   └── dino_game.py           # synchronous desktop game
-│   ├── live_games/
-│   │   ├── battle_royale.py       # async pygbag source
-│   │   ├── dino_game.py           # async pygbag source
-│   │   ├── battle-royale/         # generated web route; ignored by git
-│   │   └── dino-runner/            # generated web route; ignored by git
-│   └── manifest.json              # source and URL slug for each live game
+│   ├── manifest.json
+│   └── site_games/
+│       ├── battle-royale/
+│       │   ├── main.py
+│       │   ├── thumbnail.svg
+│       │   └── assets/
+│       └── dino-runner/
+│           ├── main.py
+│           ├── dino-runner.svg
+│           └── assets/
 ├── scripts/
-│   ├── assemble_site.py
-│   └── prepare_game.py
-├── site-assets/
-│   ├── battle-royale-mini.svg
-│   └── dino-runner.svg
+│   ├── manifest_utils.py
+│   ├── prepare_games.py
+│   └── assemble_site.py
 ├── index.html
 └── .github/workflows/pygbag.yml
 ```
 
-The `in_progress` copies use a normal synchronous Pygame loop. For example:
+`build/` contains generated Pygbag apps and the assembled site. It is ignored by Git.
 
-```sh
-./.venv/bin/python games/in_progress/dino_game.py
+## Set up the local environment
+
+Use Python 3.11 to match GitHub Actions. Pygbag 0.9.3 is pinned in the workflow and should be used locally too:
+
+**Windows PowerShell**
+
+```powershell
+py -3.11 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install pygbag==0.9.3
 ```
 
-Each browser-ready game source is listed in `games/manifest.json`. Pygbag requires each app to contain a file named `main.py`, so the build script stages every listed source under that name in `build/game-apps/<slug>/`, builds it, and keeps the maintained source filenames unchanged. Each slug becomes that game's URL folder.
+**macOS or Linux**
 
-## Add another Pygame game
+```sh
+python3.11 -m venv .venv
+source .venv/bin/activate
+python -m pip install pygbag==0.9.3
+```
 
-1. Develop it in `games/in_progress/<name>.py` using a standard Pygame loop.
-2. When it is ready for browser play, put an async pygbag-compatible copy in `games/live_games/<name>.py`.
-3. Add a unique URL `slug`, source path, and optional asset directory to `games/manifest.json`.
-4. Add its cover image under `site-assets/` and copy a `.game-card` in `index.html`. Point the card to `./games/live_games/<slug>/` and update the visible game count.
-5. Run the local build steps below. The scripts build and assemble every game in the manifest.
+## Add a game
 
-For example, a new Dino-style entry looks like:
+1. Create `games/site_games/<game-id>/main.py` with an async, Pygbag-compatible Pygame game. Use a lowercase ID with words separated by hyphens.
+2. Put game-specific files in `games/site_games/<game-id>/assets/` if needed. If you include an `assets` path in the manifest, create that directory; otherwise omit the field.
+3. Add an SVG cover in the game's folder.
+4. Add a record to the `games` list in `games/manifest.json`:
 
 ```json
 {
-  "slug": "new-runner",
-  "source": "games/live_games/new_runner.py",
-  "assets": "games/assets/new-runner"
+  "id": "new-runner",
+  "title": "New Runner",
+  "description": "A short description shown on the game card.",
+  "category": "Arcade",
+  "version": "1.0.0",
+  "published": false,
+  "featured": false,
+  "source": "games/site_games/new-runner/main.py",
+  "assets": "games/site_games/new-runner/assets",
+  "thumbnail": "games/site_games/new-runner/thumbnail.svg",
+  "thumbnail_alt": "A short description of the cover image."
 }
 ```
 
-For game-specific assets, use `games/assets/<slug>/`; the build script copies that folder into that game's staged pygbag app as `assets/`.
+Set `published` to `true` when the game is ready for the public site. Published games are built and included in the homepage automatically. The game URL is derived from its ID, so existing routes stay stable: `/games/live_games/<game-id>/`. The homepage reads generated `build/site/games.json`; do not add or edit game cards directly in `index.html`.
 
-## Why the homepage tile needs a build
+The manifest validator checks every entry, including unpublished entries, for a unique ID that is URL-safe and filesystem-safe, required metadata, Boolean publishing flags, source and thumbnail files, and optional asset folders. Paths must stay inside the repository and cannot traverse with `..` or symlinks.
 
-Go Live serves static files; it does not execute Python or compile Pygame. The homepage card navigates to a folder containing pygbag's generated web files. The build and assembly scripts create that folder for Go Live and create the matching folder in `build/site` for GitHub Pages.
+To publish a game, change its `published` value to `true`; to remove it from the next public build, change it to `false`. Validation still checks unpublished entries so drafts are ready to build when enabled. Generated game routes live under `build/site/games/live_games/` and are recreated from the published manifest on each assembly.
 
-Running pygbag against a single game app opens that game's own page directly. It does not serve the arcade homepage. To test the combined site, build and assemble the games first, then serve `build/site` or open the root homepage with Go Live.
+## Validate and test
 
-## Preview locally
+Run these commands from the repository root. They use only Python's built-in test framework:
 
-Build every configured game, assemble the homepage, and serve the assembled site:
+**Windows PowerShell**
 
-```sh
-./.venv/bin/python scripts/prepare_game.py
-./.venv/bin/python scripts/assemble_site.py
-./.venv/bin/python -m http.server 8080 --directory build/site
+```powershell
+python scripts/manifest_utils.py
+python -m unittest discover -s tests -v
 ```
 
-Open `http://localhost:8080`. The first pygbag build can take longer while runtime files download. To use Go Live, open the root `index.html` after assembly; the scripts also place each generated game route under `games/live_games/` for this local preview.
-
-To launch one compiled game directly in pygbag's server, use its staged folder, for example:
+**macOS or Linux**
 
 ```sh
-./.venv/bin/python -m pygbag build/game-apps/dino-runner
+python scripts/manifest_utils.py
+python -m unittest discover -s tests -v
 ```
 
-This opens the Dino game directly, without the homepage.
+The tests use temporary fixture repositories, so they do not modify game sources or your assembled site. `scripts/check_site.py` checks the assembled homepage, JSON registry, public game routes, thumbnails, unpublished route exclusion, and homepage registry-loading code.
 
-## GitHub Pages deployment
+## Build and preview locally
 
-The workflow `.github/workflows/pygbag.yml` builds every game in the manifest, assembles the homepage and all game routes into `build/site`, and publishes that directory to `gh-pages` on pushes to `main`. It can also be run manually from **Actions**.
+Run the build steps from the repository root (`copper-cloud/`), not from `scripts/`:
 
-Before deployment, configure:
+```sh
+python scripts/prepare_games.py
+python scripts/assemble_site.py
+python scripts/check_site.py
+```
 
-1. **Settings → Actions → General → Workflow permissions**: **Read and write permissions**.
-2. **Settings → Pages → Build and deployment**: **Deploy from a branch**, branch `gh-pages`, folder `/(root)`.
+Use two terminals from the repository root for the local preview. In the first, start Pygbag's development server and leave it running:
 
-The homepage is `https://edburgoyne.github.io/copper-cloud/`. The game URLs are:
+```sh
+python -m pygbag build/game-apps/battle-royale
+```
+
+Pygbag uses this server on port 8000 to proxy its WebAssembly packages during local development. In the second terminal, serve the assembled homepage:
+
+```sh
+python -m http.server 8080 --directory build/site
+```
+
+Open `http://localhost:8080/` (or `http://localhost:8080/index.html`). In PowerShell, activate the environment first with `.\.venv\Scripts\Activate.ps1`. GitHub Pages uses Pygbag's public CDN, so the port 8000 server is only needed for local preview. Assembly prepares a complete staged site before replacing `build/site`, and checks all required Pygbag outputs before changing the current site.
+
+The first Pygbag build may take longer while it prepares the browser runtime. The assembled site contains only published games and their cover images.
+
+## Publish
+
+The workflow in `.github/workflows/pygbag.yml` checks out the repository, installs Python 3.11 and Pygbag 0.9.3, validates the manifest, runs the unit tests, builds published games, assembles and checks `build/site`, then publishes to the existing `gh-pages` branch. Any failed step stops deployment. It runs on pushes to `main` and can be started manually from the GitHub Actions tab. The workflow needs repository contents write permission for the existing `gh-pages` publishing action. Keep GitHub Pages configured to deploy from `gh-pages` at the repository root.
+
+When a build fails, inspect the first failing GitHub Actions step. Manifest errors identify the game and field; a missing Pygbag output means the game build did not finish successfully. Run the same validation, test, build, assembly, and site-check commands locally to reproduce it. A successful compile confirms generated files exist, not that gameplay works in a browser.
+
+The homepage fetches `games.json` with `cache: "no-cache"`, asking browsers and the hosting cache to revalidate this small registry. Larger Pygbag game files keep normal caching. If a game list still looks old after a publish, hard refresh the page or open it in a private window and check that the deployed `games.json` contains the expected entries.
+
+The existing game URLs are:
 
 - Battle Royale Mini: `https://edburgoyne.github.io/copper-cloud/games/live_games/battle-royale/`
-- Dino Game: `https://edburgoyne.github.io/copper-cloud/games/live_games/dino-runner/`
+- Dino Runner: `https://edburgoyne.github.io/copper-cloud/games/live_games/dino-runner/`

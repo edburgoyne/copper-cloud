@@ -1,12 +1,30 @@
-[
-  {
-    "slug": "battle-royale",
-    "source": "games/live_games/battle_royale.py",
-    "assets": "games/assets/battle-royale"
-  },
-  {
-    "slug": "dino-runner",
-    "source": "games/live_games/dino_game.py",
-    "assets": "games/assets/dino-runner"
-  }
-]
+{
+  "games": [
+    {
+      "id": "dino-runner",
+      "title": "Dino Runner",
+      "description": "Jump over cacti and survive as long as possible.",
+      "category": "Arcade",
+      "version": "1.0.0",
+      "published": false,
+      "featured": true,
+      "source": "games/site_games/dino-runner/main.py",
+      "assets": "games/site_games/dino-runner/assets",
+      "thumbnail": "games/site_games/dino-runner/dino-runner.svg",
+      "thumbnail_alt": "A dinosaur jumping over cacti on a desert track."
+    },
+    {
+      "id": "battle-royale",
+      "title": "Battle Royale Mini",
+      "description": "Outlast the bots and survive the shrinking storm.",
+      "category": "Action",
+      "version": "1.0.0",
+      "published": true,
+      "featured": false,
+      "source": "games/site_games/battle-royale/main.py",
+      "assets": "games/site_games/battle-royale/assets",
+      "thumbnail": "games/site_games/battle-royale/thumbnail.svg",
+      "thumbnail_alt": "A top-down arena with fighters inside a shrinking purple storm."
+    }
+  ]
+}
