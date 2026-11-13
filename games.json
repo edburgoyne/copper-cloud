@@ -4,9 +4,22 @@
     "title": "Battle Royale Mini",
     "description": "Outlast the bots and survive the shrinking storm.",
     "category": "Action",
-    "featured": false,
+    "creator": "Copper Cloud",
+    "controls": [
+      "1–4 or click: choose a game mode",
+      "W, A, S, D: move; mouse: aim; click: shoot",
+      "Q: build a wood wall",
+      "E: harvest and F: build a stone wall in Craft Royale",
+      "R: return to the menu after a game"
+    ],
+    "aspect_ratio": [
+      900,
+      600
+    ],
+    "featured": true,
     "thumbnail": "./games/site_games/battle-royale/thumbnail.svg",
     "thumbnail_alt": "A top-down arena with fighters inside a shrinking purple storm.",
-    "url": "./games/live_games/battle-royale/"
+    "url": "./games/live_games/battle-royale/",
+    "page_url": "./play.html?game=battle-royale"
   }
 ]
