@@ -14,7 +14,7 @@ WINDOWS_RESERVED_IDS = {"con", "prn", "aux", "nul"} | {
     for prefix in ("com", "lpt")
     for number in range(1, 10)
 }
-REQUIRED_TEXT_FIELDS = ("title", "description", "category", "version")
+REQUIRED_TEXT_FIELDS = ("title", "description", "category", "version", "creator")
 
 
 def _manifest_path(value, field, game_id, root):
@@ -83,6 +83,18 @@ def validate_games(games, *, root=ROOT):
         for field in ("published", "featured"):
             if not isinstance(game.get(field), bool):
                 raise ValueError(f"Game {game_id!r} must set {field!r} to true or false.")
+        controls = game.get("controls")
+        if not isinstance(controls, list) or not controls or any(
+            not isinstance(control, str) or not control.strip() for control in controls
+        ):
+            raise ValueError(f"Game {game_id!r} must have a non-empty list of 'controls'.")
+        aspect_ratio = game.get("aspect_ratio")
+        if (
+            not isinstance(aspect_ratio, list)
+            or len(aspect_ratio) != 2
+            or any(type(dimension) is not int or not 0 < dimension <= 8192 for dimension in aspect_ratio)
+        ):
+            raise ValueError(f"Game {game_id!r} must have an 'aspect_ratio' of two positive dimensions.")
         if not isinstance(game.get("thumbnail_alt"), str) or not game["thumbnail_alt"].strip():
             raise ValueError(f"Game {game_id!r} must have non-empty 'thumbnail_alt' text.")
 

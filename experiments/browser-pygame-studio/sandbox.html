@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' data: blob: https://cdn.jsdelivr.net; connect-src https://cdn.jsdelivr.net; worker-src data: blob:; img-src 'none'; media-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>Disposable game sandbox</title>
+</head>
+<body>
+<script>
+"use strict";
+// This document is loaded with sandbox="allow-scripts", without allow-same-origin.
+// It never receives site credentials and treats the worker's messages as untrusted.
+let worker = null;
+let watchdog = null;
+let monitoring = false;
+let lastHeartbeat = 0;
+let warned = false;
+function send(message, transfer = []) { parent.postMessage(message, "*", transfer); }
+addEventListener("securitypolicyviolation", (event) => {
+  const directive = String(event.effectiveDirective || event.violatedDirective || "security policy");
+  const text = directive.startsWith("worker-src")
+    ? "Starting the game worker was blocked by the browser's security policy. Check that this experiment is served over HTTP and that data: workers are permitted."
+    : `A resource or operation was blocked by the browser's security policy (${directive}). Check the browser Console for details.`;
+  send({ type: "warning", text });
+});
+function stop() {
+  if (watchdog) clearInterval(watchdog);
+  watchdog = null;
+  monitoring = false;
+  warned = false;
+  if (worker) worker.terminate();
+  worker = null;
+}
+addEventListener("message", (event) => {
+  if (event.source !== parent || !event.data || typeof event.data !== "object") return;
+  const message = event.data;
+  if (message.type === "stop") {
+    stop();
+    send({ type: "stopped" });
+  } else if (message.type === "input" && worker) {
+    worker.postMessage({ type: "input", input: message.input });
+  } else if (message.type === "start" && !worker &&
+             typeof message.workerSource === "string" && message.workerSource.length < 100000 &&
+             typeof message.bootstrap === "string" && message.bootstrap.length < 100000 &&
+             typeof message.code === "string" && message.code.length <= 102400) {
+    try {
+      // Chromium can fail silently for blob: module workers in opaque-origin
+      // frames. A self-contained data: module retains isolation and starts there.
+      const workerURL = `data:text/javascript;charset=utf-8,${encodeURIComponent(message.workerSource)}`;
+      worker = new Worker(workerURL, { type: "module", name: "copper-studio-game" });
+      worker.onmessage = (workerEvent) => {
+        const result = workerEvent.data;
+        if (!result || typeof result !== "object") return;
+        if (result.type === "heartbeat") {
+          lastHeartbeat = performance.now();
+          if (monitoring && warned) {
+            warned = false;
+            send({ type: "status", text: "The program is responding again." });
+          }
+          return;
+        }
+        if (!monitoring && result.type === "status" && typeof result.text === "string" && result.text.startsWith("Running program.")) {
+          monitoring = true;
+          lastHeartbeat = performance.now();
+          watchdog = setInterval(() => {
+            if (monitoring && !warned && performance.now() - lastHeartbeat > 3500) {
+              warned = true;
+              send({ type: "warning", text: "The program may be stuck or busy. Press Stop to end it." });
+            }
+          }, 1000);
+        }
+        if (result.type === "done" || result.type === "error") {
+          monitoring = false;
+          if (watchdog) clearInterval(watchdog);
+          watchdog = null;
+        }
+        if (result.type === "frame" && Number.isInteger(result.width) && Number.isInteger(result.height) &&
+            result.width > 0 && result.height > 0 && result.width <= 1280 && result.height <= 960 &&
+            result.pixels instanceof ArrayBuffer && result.pixels.byteLength === result.width * result.height * 4) {
+          send(result, [result.pixels]);
+        } else if (["status", "output", "error", "done", "warning"].includes(result.type) && typeof result.text === "string") {
+          send({ type: result.type, text: result.text.slice(0, 8192), elapsed: Number(result.elapsed) || 0 });
+        }
+      };
+      worker.onerror = (error) => {
+        monitoring = false;
+        if (watchdog) clearInterval(watchdog);
+        watchdog = null;
+        send({ type: "error", text: `Worker failed: ${error.message || "unknown error"}. Check the browser Console for the underlying error.` });
+      };
+      worker.postMessage({ type: "start", code: message.code, bootstrap: message.bootstrap });
+    } catch (error) {
+      stop();
+      send({ type: "error", text: `Could not create the worker: ${error.message}` });
+    }
+  }
+});
+send({ type: "sandbox-ready" });
+</script>
+</body>
+</html>

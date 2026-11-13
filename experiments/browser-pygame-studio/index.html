@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Browser Pygame Studio — experiment</title>
+  <link rel="stylesheet" href="./studio.css">
+  <script src="./studio.js" defer></script>
+</head>
+<body>
+  <main>
+    <h1>Browser Pygame Studio <small>proof of concept</small></h1>
+    <p>This isolated experiment runs Python in your browser. Use only for testing; it is not a production security boundary. Code must yield to the browser in its game loop.</p>
+    <div class="workspace">
+      <section aria-labelledby="editor-heading">
+        <h2 id="editor-heading">Python program</h2>
+        <label for="code">Paste a complete Python program</label>
+        <textarea id="code" spellcheck="false" autocapitalize="off" autocomplete="off" aria-describedby="code-help"></textarea>
+        <p id="code-help">Maximum source size: 100 KiB. Tab and Shift+Tab indent selected lines. Press Escape, then Tab to move focus out of the editor.</p><span id="editor-status" class="sr-only" role="status"></span>
+        <div class="actions"><button id="run" type="button">Run</button><button id="stop" type="button" disabled>Stop</button><button id="restart" type="button" disabled>Restart</button></div>
+      </section>
+      <section aria-labelledby="preview-heading">
+        <h2 id="preview-heading">Game preview</h2>
+        <p>Click the preview before using the keyboard. A fresh worker starts for every run.</p>
+        <div class="preview"><canvas id="preview" width="640" height="400" tabindex="0" aria-label="Game preview. Click here to focus keyboard controls."></canvas></div>
+        <p id="status" role="status">Loading the example…</p>
+        <div class="console-heading"><h2>Console</h2><button id="copy-console" type="button" aria-controls="console">Copy console</button></div>
+        <p id="copy-status" role="status"></p>
+        <pre id="console" aria-live="polite" aria-label="Python output and errors"></pre>
+      </section>
+    </div>
+    <p>Runtime and compatibility details: <a href="./REPORT.md">research and test report</a>.</p>
+  </main>
+</body>
+</html>

@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#17191b">
+  <meta name="description" content="Play a game in the Copper Cloud arcade."><title>Play — Copper Cloud</title>
+  <link rel="icon" type="image/svg+xml" href="./site-assets/favicon.svg"><link rel="stylesheet" href="./site-assets/styles.css"><script src="./site-assets/site.js" defer></script>
+</head>
+<body data-page="play">
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header"><div class="shell header-inner"><a class="brand" href="./" aria-label="Copper Cloud home"><img src="./site-assets/logo.svg" alt="" width="42" height="42"><span>COPPER<span class="brand-light"> CLOUD</span><small>THE COMMUNITY ARCADE</small></span></a><button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-nav">Menu <span aria-hidden="true">☰</span></button><nav class="site-nav" id="site-nav" aria-label="Main navigation"><a href="./games.html" aria-current="page">Games</a><a href="./create.html">Create</a><a href="./about.html">About</a></nav><div class="header-space" aria-hidden="true"></div></div></header>
+  <main id="main" class="shell page-main play-page">
+    <a class="back-link" href="./games.html"><span aria-hidden="true">←</span> Back to games</a>
+    <p id="play-status" class="status" role="status">Loading game…</p>
+    <div id="play-content" hidden>
+      <div class="play-heading"><div><p class="eyebrow" id="play-category"></p><h1 id="play-title"></h1><p class="creator-line">Created by <span id="play-creator"></span></p></div><p id="play-description" class="play-description"></p></div>
+      <div class="game-window"><iframe id="game-frame" title="Game" allow="autoplay; fullscreen" allowfullscreen></iframe></div>
+      <div class="game-toolbar"><p><span aria-hidden="true">✦</span> Click inside the game to start and use your keyboard.</p><div class="toolbar-buttons"><button id="restart-game" class="button button-secondary button-small" type="button">↻ &nbsp; Restart</button><button id="fullscreen-game" class="button button-secondary button-small" type="button">⛶ &nbsp; Fullscreen</button></div></div>
+      <p id="game-action-status" class="status" role="status" hidden></p>
+      <div class="play-details"><div><p class="eyebrow">BEFORE YOU PLAY</p><h2>How to play<span class="heading-dot">.</span></h2><p>Give the game a moment to load, then click inside its window to focus it.</p></div><div class="controls-panel"><h3>Controls</h3><ul id="play-controls"></ul><a id="direct-game-link" class="text-link" href="./games.html">Open game on its own <span aria-hidden="true">↗</span></a></div></div>
+      <section class="section section-divider" aria-labelledby="recommendations-title"><div class="section-heading"><div><p class="eyebrow">KEEP EXPLORING</p><h2 id="recommendations-title">More to play<span class="heading-dot">.</span></h2></div><a class="text-link" href="./games.html">All games <span aria-hidden="true">↗</span></a></div><div id="recommendations" class="game-grid"></div><p id="recommendations-status" class="status" role="status" hidden></p></section>
+    </div>
+  </main>
+  <footer class="site-footer"><div class="shell footer-inner"><div><a class="footer-brand" href="./">✦ &nbsp; COPPER CLOUD</a><p>A little world for playing and making.</p></div><nav aria-label="Footer navigation"><a href="./games.html">Games</a><a href="./create.html">Create</a><a href="./about.html">About</a></nav><p class="footer-signoff">MADE FOR CURIOUS MINDS <span>✳</span></p></div></footer>
+</body>
+</html>

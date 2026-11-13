@@ -5,6 +5,12 @@
       "title": "Dino Runner",
       "description": "Jump over cacti and survive as long as possible.",
       "category": "Arcade",
+      "creator": "Copper Cloud",
+      "controls": [
+        "Space or Up Arrow: jump",
+        "R: restart after game over"
+      ],
+      "aspect_ratio": [800, 400],
       "version": "1.0.0",
       "published": false,
       "featured": true,
@@ -18,9 +24,18 @@
       "title": "Battle Royale Mini",
       "description": "Outlast the bots and survive the shrinking storm.",
       "category": "Action",
+      "creator": "Copper Cloud",
+      "controls": [
+        "1–4 or click: choose a game mode",
+        "W, A, S, D: move; mouse: aim; click: shoot",
+        "Q: build a wood wall",
+        "E: harvest and F: build a stone wall in Craft Royale",
+        "R: return to the menu after a game"
+      ],
+      "aspect_ratio": [900, 600],
       "version": "1.0.0",
       "published": true,
-      "featured": false,
+      "featured": true,
       "source": "games/site_games/battle-royale/main.py",
       "assets": "games/site_games/battle-royale/assets",
       "thumbnail": "games/site_games/battle-royale/thumbnail.svg",

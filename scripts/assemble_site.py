@@ -1,4 +1,4 @@
-"""Assemble the homepage and published pygbag games under build/site."""
+"""Assemble the static site and published Pygbag games under build/site."""
 
 import json
 import os
@@ -11,6 +11,7 @@ from manifest_utils import load_manifest, resolve_manifest_path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+SITE_FILES = ("index.html", "games.html", "play.html", "create.html", "about.html", "GAME_CREATION_GUIDE.md")
 
 
 def assemble_site(root=ROOT):
@@ -21,9 +22,11 @@ def assemble_site(root=ROOT):
     )
     site_root = root / "build" / "site"
     games_build_root = root / "build" / "game-apps"
-    homepage = root / "index.html"
-    if not homepage.is_file():
-        raise SystemExit(f"Homepage source is missing: {homepage}")
+    for filename in SITE_FILES:
+        if not (root / filename).is_file():
+            raise SystemExit(f"Site source is missing: {root / filename}")
+    if not (root / "site-assets").is_dir():
+        raise SystemExit(f"Site assets are missing: {root / 'site-assets'}")
 
     for game in games:
         game_id = game["id"]
@@ -62,15 +65,21 @@ def assemble_site(root=ROOT):
                     "title": game["title"],
                     "description": game["description"],
                     "category": game["category"],
+                    "creator": game["creator"],
+                    "controls": game["controls"],
+                    "aspect_ratio": game["aspect_ratio"],
                     "featured": game["featured"],
                     "thumbnail": "./" + quote(thumbnail_relative.as_posix(), safe="/"),
                     "thumbnail_alt": game["thumbnail_alt"],
                     "url": "./" + route.as_posix() + "/",
+                    "page_url": "./play.html?game=" + quote(game_id, safe=""),
                 }
             )
             print(f"Added {game_id} at /{route.as_posix()}/")
 
-        shutil.copy2(homepage, staged_site / "index.html")
+        for filename in SITE_FILES:
+            shutil.copy2(root / filename, staged_site / filename)
+        shutil.copytree(root / "site-assets", staged_site / "site-assets", dirs_exist_ok=True)
         (staged_site / "games.json").write_text(
             json.dumps(public_games, indent=2, ensure_ascii=False) + "\n",
             encoding="utf-8",

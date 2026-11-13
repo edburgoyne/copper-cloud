@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from assemble_site import assemble_site
+from assemble_site import SITE_FILES, assemble_site
 from check_site import check_site
 from manifest_utils import load_manifest, validate_games
 from prepare_games import prepare_games
@@ -24,11 +24,10 @@ class BuildPipelineTests(unittest.TestCase):
         self.root = temp_parent / f"fixture-{uuid.uuid4().hex}"
         self.root.mkdir(parents=True)
         (self.root / "games").mkdir()
-        (self.root / "index.html").write_text(
-            '<script>fetch("./games.json", {cache: "no-cache"}).then((r) => r.json()).then((games) => '
-            'gameGrid.replaceChildren(...games.map((game) => game.thumbnail + game.url)));</script>',
-            encoding="utf-8",
-        )
+        project_root = Path(__file__).resolve().parents[1]
+        for filename in SITE_FILES:
+            shutil.copy2(project_root / filename, self.root / filename)
+        shutil.copytree(project_root / "site-assets", self.root / "site-assets")
         self.games = [self.game("public-game", True), self.game("draft-game", False)]
         self.write_manifest()
 
@@ -45,6 +44,9 @@ class BuildPipelineTests(unittest.TestCase):
             "title": game_id.title(),
             "description": "A fixture game.",
             "category": "Arcade",
+            "creator": "Fixture Creator",
+            "controls": ["Space: jump"],
+            "aspect_ratio": [800, 400],
             "version": "1.0.0",
             "published": published,
             "featured": False,
@@ -80,6 +82,17 @@ class BuildPipelineTests(unittest.TestCase):
         del self.games[0]["title"]
         with self.assertRaisesRegex(ValueError, "public-game.*title"):
             validate_games(self.games, root=self.root)
+
+    def test_invalid_controls_and_aspect_ratio_are_rejected(self):
+        self.games[0]["controls"] = []
+        with self.assertRaisesRegex(ValueError, "public-game.*controls"):
+            validate_games(self.games, root=self.root)
+        self.games[0]["controls"] = ["Space: jump"]
+        for dimensions in ([800, 0], [800, True], [800], "800 / 400"):
+            self.games[0]["aspect_ratio"] = dimensions
+            with self.subTest(dimensions=dimensions):
+                with self.assertRaisesRegex(ValueError, "public-game.*aspect_ratio"):
+                    validate_games(self.games, root=self.root)
 
     def test_duplicate_and_invalid_ids_are_rejected(self):
         self.games[1]["id"] = self.games[0]["id"]
@@ -127,6 +140,15 @@ class BuildPipelineTests(unittest.TestCase):
         site = self.root / "build" / "site"
         registry = json.loads((site / "games.json").read_text(encoding="utf-8"))
         self.assertEqual(["public-game"], [game["id"] for game in registry])
+        self.assertEqual("Fixture Creator", registry[0]["creator"])
+        self.assertEqual(["Space: jump"], registry[0]["controls"])
+        self.assertEqual([800, 400], registry[0]["aspect_ratio"])
+        self.assertEqual("./play.html?game=public-game", registry[0]["page_url"])
+        self.assertEqual("./games/live_games/public-game/", registry[0]["url"])
+        self.assertNotIn("source", registry[0])
+        self.assertTrue((site / "create.html").is_file())
+        self.assertTrue((site / "GAME_CREATION_GUIDE.md").is_file())
+        self.assertTrue((site / "site-assets" / "logo.svg").is_file())
         self.assertTrue((site / "games" / "live_games" / "public-game" / "index.html").is_file())
         self.assertFalse((site / "games" / "live_games" / "draft-game").exists())
 
@@ -138,6 +160,24 @@ class BuildPipelineTests(unittest.TestCase):
         with self.assertRaisesRegex(SystemExit, "No Pygbag build found.*public-game"):
             assemble_site(self.root)
         self.assertEqual("keep me", marker.read_text(encoding="utf-8"))
+
+    def test_thumbnail_in_shared_assets_can_be_assembled(self):
+        self.games[0]["thumbnail"] = "site-assets/logo.svg"
+        self.write_manifest()
+        self.make_build("public-game")
+        assemble_site(self.root)
+        check_site(self.root)
+        self.assertTrue((self.root / "build" / "site" / "site-assets" / "logo.svg").is_file())
+
+    def test_site_check_rejects_tampered_public_metadata(self):
+        self.make_build("public-game")
+        assemble_site(self.root)
+        registry = self.root / "build" / "site" / "games.json"
+        public_games = json.loads(registry.read_text(encoding="utf-8"))
+        public_games[0]["controls"] = ["Incorrect controls"]
+        registry.write_text(json.dumps(public_games), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "incorrect 'controls' metadata"):
+            check_site(self.root)
 
     def test_failed_game_build_preserves_previous_compiled_output(self):
         build = self.root / "build" / "game-apps" / "public-game" / "build" / "web"

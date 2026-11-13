@@ -2,8 +2,9 @@
 
 import json
 from pathlib import Path
-from urllib.parse import unquote
+from urllib.parse import quote, unquote
 
+from assemble_site import SITE_FILES
 from manifest_utils import load_manifest
 
 
@@ -19,6 +20,12 @@ def check_site(root=ROOT):
         raise ValueError(f"Assembled homepage is missing: {homepage}")
     if not registry.is_file():
         raise ValueError(f"Generated game registry is missing: {registry}")
+    for filename in SITE_FILES:
+        if not (site / filename).is_file():
+            raise ValueError(f"Assembled site file is missing: {filename}")
+    for filename in ("styles.css", "site.js", "logo.svg", "favicon.svg", "game-placeholder.svg"):
+        if not (site / "site-assets" / filename).is_file():
+            raise ValueError(f"Assembled site asset is missing: {filename}")
 
     try:
         public_games = json.loads(registry.read_text(encoding="utf-8"))
@@ -41,7 +48,10 @@ def check_site(root=ROOT):
             f"{expected_ids!r}."
         )
 
-    public_fields = ("title", "description", "category", "featured", "thumbnail_alt")
+    public_fields = (
+        "title", "description", "category", "creator", "controls", "aspect_ratio",
+        "featured", "thumbnail_alt",
+    )
     for manifest_game, public_game in zip(manifest_games, public_games):
         for field in public_fields:
             if public_game.get(field) != manifest_game[field]:
@@ -49,19 +59,21 @@ def check_site(root=ROOT):
                     f"Public game {manifest_game['id']!r} has incorrect {field!r} metadata."
                 )
 
-    homepage_text = homepage.read_text(encoding="utf-8")
-    for marker in (
-        'fetch("./games.json"',
-        'cache: "no-cache"',
-        "gameGrid.replaceChildren",
-        "game.thumbnail",
-        "game.url",
-    ):
-        if marker not in homepage_text:
-            raise ValueError(f"Homepage does not appear to load and render games.json ({marker}).")
+    frontend_script = (site / "site-assets" / "site.js").read_text(encoding="utf-8")
+    for marker in ('fetch("./games.json"', 'cache: "no-cache"', "createGameCard", "game.page_url"):
+        if marker not in frontend_script:
+            raise ValueError(f"Frontend does not appear to load and render games.json ({marker}).")
+    for filename in ("index.html", "games.html", "play.html", "create.html", "about.html"):
+        page = (site / filename).read_text(encoding="utf-8")
+        if "./site-assets/styles.css" not in page or "./site-assets/site.js" not in page:
+            raise ValueError(f"Site page {filename!r} is missing shared frontend assets.")
 
     for entry in public_games:
         game_id = entry["id"]
+        if entry.get("url") != f"./games/live_games/{game_id}/":
+            raise ValueError(f"Public game {game_id!r} has an incorrect direct game URL.")
+        if entry.get("page_url") != "./play.html?game=" + quote(game_id, safe=""):
+            raise ValueError(f"Public game {game_id!r} has an incorrect game page URL.")
         for field in ("url", "thumbnail"):
             value = entry.get(field)
             if not isinstance(value, str) or not value.startswith("./"):
@@ -90,7 +102,7 @@ def check_site(root=ROOT):
         if route.exists():
             raise ValueError(f"Unpublished game {game['id']!r} has a generated public route: {route}")
 
-    print(f"Checked {len(public_games)} public games, routes, thumbnails, and homepage registry loading.")
+    print(f"Checked {len(public_games)} public games, routes, metadata, thumbnails, and shared site files.")
 
 
 def main():
