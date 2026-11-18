@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 400" role="img" aria-labelledby="title desc">
+  <title id="title">Dino Runner preview illustration</title>
+  <desc id="desc">A small dinosaur faces a cactus on a copper-colored horizon beneath a night sky.</desc>
+  <defs>
+    <linearGradient id="sky" x2="0" y2="1">
+      <stop stop-color="#292c30"/>
+      <stop offset="1" stop-color="#594237"/>
+    </linearGradient>
+    <linearGradient id="horizon" x2="0" y2="1">
+      <stop stop-color="#9e6c49"/>
+      <stop offset="1" stop-color="#4d3429"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="400" fill="url(#sky)"/>
+  <circle cx="630" cy="95" r="42" fill="#d6a175" opacity=".9"/>
+  <circle cx="647" cy="82" r="42" fill="#292c30"/>
+  <g fill="#f1d8bd" opacity=".8">
+    <circle cx="114" cy="70" r="3"/><circle cx="250" cy="112" r="2"/>
+    <circle cx="407" cy="59" r="3"/><circle cx="732" cy="151" r="2"/>
+  </g>
+  <path d="M0 275c114-62 220-24 321-53 107-31 231-1 479-45v223H0Z" fill="url(#horizon)"/>
+  <path d="M0 319h800v81H0Z" fill="#292727"/>
+  <path d="M0 319h800" stroke="#d5aa83" stroke-width="4"/>
+  <g fill="#8a644d" opacity=".8">
+    <path d="M72 348h53v5H72zm170 21h74v5h-74zm390-20h60v5h-60z"/>
+  </g>
+  <g fill="#e0c8ad">
+    <path d="M190 229h47v72h-47zm23-21h24v28h-24zm-28 53h15v25h-15z"/>
+    <path d="M520 240h18v79h-18zm-20 19h20v13h-20zm30-17h19v13h-19zm-22-29h11v31h-11z" fill="#75936a"/>
+  </g>
+  <circle cx="226" cy="224" r="4" fill="#292727"/>
+  <text x="40" y="48" fill="#f4eae0" font-family="system-ui,sans-serif" font-size="14" font-weight="700" letter-spacing="2">DINO RUNNER / STATIC PREVIEW</text>
+</svg>

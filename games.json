@@ -1,5 +1,25 @@
 [
   {
+    "id": "dino-runner",
+    "title": "Dino Runner",
+    "description": "Jump over cacti and survive as long as possible.",
+    "category": "Arcade",
+    "creator": "Copper Cloud",
+    "controls": [
+      "Space or Up Arrow: jump",
+      "R: restart after game over"
+    ],
+    "aspect_ratio": [
+      800,
+      400
+    ],
+    "featured": true,
+    "thumbnail": "./games/site_games/dino-runner/dino-runner.svg",
+    "thumbnail_alt": "A dinosaur jumping over cacti on a desert track.",
+    "url": "./games/live_games/dino-runner/",
+    "page_url": "./play.html?game=dino-runner"
+  },
+  {
     "id": "battle-royale",
     "title": "Battle Royale Mini",
     "description": "Outlast the bots and survive the shrinking storm.",

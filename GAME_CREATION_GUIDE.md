@@ -1,5 +1,7 @@
 # Make a game for Copper Cloud
 
+The public Game Studio (WIP) preview currently shows and runs one fixed Dino Runner sample. Its source display is read-only; visitors cannot run their own code or submit games there. Use the Pygbag workflow in this guide to prepare games for the arcade.
+
 You can make a small game with Python and Pygame, then use Pygbag to try it in a browser. Start with something you can play in a few minutes: one player, one goal, and one challenge. Add more only after that version works.
 
 Submissions to Copper Cloud are planned for the future and are not open yet. Save your project and keep improving it. A future review will check that games work in the browser and are suitable for the community.
