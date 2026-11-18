@@ -24,9 +24,22 @@
         <p>Click the preview before using the keyboard. A fresh worker starts for every run.</p>
         <div class="preview"><canvas id="preview" width="640" height="400" tabindex="0" aria-label="Game preview. Click here to focus keyboard controls."></canvas></div>
         <p id="status" role="status">Loading the example…</p>
-        <div class="console-heading"><h2>Console</h2><button id="copy-console" type="button" aria-controls="console">Copy console</button></div>
+        <div class="console-heading"><h2>Program output</h2><button id="copy-console" type="button" aria-controls="console">Copy output</button></div>
         <p id="copy-status" role="status"></p>
         <pre id="console" aria-live="polite" aria-label="Python output and errors"></pre>
+        <section id="python-error" class="error-panel" aria-live="polite" hidden>
+          <h3 id="error-heading">Python error</h3>
+          <p id="error-explanation"></p>
+          <p id="error-location"></p>
+          <pre id="error-traceback"></pre>
+          <button id="copy-error" type="button">Copy error details</button>
+          <p id="error-copy-status" role="status"></p>
+        </section>
+        <p id="diagnostic-summary" class="diagnostic-summary" role="status" hidden></p>
+        <details id="runtime-details" hidden>
+          <summary>Runtime diagnostics and technical details</summary>
+          <pre id="runtime-console" aria-label="Technical runtime details"></pre>
+        </details>
       </section>
     </div>
     <p>Runtime and compatibility details: <a href="./REPORT.md">research and test report</a>.</p>

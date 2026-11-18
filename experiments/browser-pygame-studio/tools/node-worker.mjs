@@ -2,17 +2,28 @@
 import { parentPort, workerData } from "node:worker_threads";
 import { fileURLToPath } from "node:url";
 import fs from "node:fs";
+import { formatPythonError } from "../error-format.mjs";
 
 const base = new URL("../../../build/browser-studio-runtime-314.0.7/", import.meta.url);
 const { loadPyodide } = await import(new URL("pyodide.mjs", base));
 const pending = [];
+let lastMeasuredFrame = 0;
 parentPort.on("message", (message) => { if (message?.type === "input") pending.push(message.input); });
 globalThis.studio_take_input = () => JSON.stringify(pending.splice(0));
-globalThis.studio_should_render = () => true;
+globalThis.studio_should_render = () => {
+  if (!workerData.measureFrames) return true;
+  return performance.now() - lastMeasuredFrame >= 1000 / 30;
+};
 globalThis.studio_present = (width, height, bytes) => {
   const view = bytes.getBuffer("u8");
   try {
-    const data = view.data;
+    const pixels = new Uint8ClampedArray(view.data);
+    if (workerData.measureFrames) {
+      lastMeasuredFrame = performance.now();
+      parentPort.postMessage({ type: "frame", width, height, pixels: pixels.buffer }, [pixels.buffer]);
+      return;
+    }
+    const data = pixels;
     let copperX = 0, copperCount = 0, dinoTop = height;
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
@@ -33,11 +44,21 @@ try {
     stderr: (text) => parentPort.postMessage({ type: "output", text }),
   });
   await py.loadPackage("pygame-ce");
+  const wasmBytes = py._module?.HEAPU8?.buffer?.byteLength ?? null;
   py.runPython(fs.readFileSync(new URL("../pygame_bridge.py", import.meta.url), "utf8"));
   py.globals.set("__studio_source", workerData.code);
-  parentPort.postMessage({ type: "running", elapsed: Math.round(performance.now() - started) });
+  parentPort.postMessage({
+    type: "running",
+    elapsed: Math.round(performance.now() - started),
+    wasmBytes,
+  });
   await py.runPythonAsync("await studio_execute(__studio_source)");
   parentPort.postMessage({ type: "done" });
 } catch (error) {
-  parentPort.postMessage({ type: "error", text: String(error) });
+  const detail = String(error?.message ?? error);
+  if (/PythonError|Traceback \(most recent call last\)|File ["']main\.py["']/.test(detail)) {
+    parentPort.postMessage({ type: "python-error", ...formatPythonError(error, workerData.code) });
+  } else {
+    parentPort.postMessage({ type: "error", text: detail, technical: String(error?.stack ?? error) });
+  }
 }

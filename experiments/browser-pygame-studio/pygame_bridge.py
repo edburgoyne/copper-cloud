@@ -81,6 +81,14 @@ def _pump():
     for item in json.loads(studio_take_input()):
         kind = item.get("type")
         if kind == "blur":
+            for key in tuple(_held):
+                _events.append(pygame.event.Event(pygame.KEYUP, key=key, unicode="", mod=0))
+            for button in tuple(_mouse_buttons):
+                _events.append(
+                    pygame.event.Event(
+                        pygame.MOUSEBUTTONUP, pos=_mouse_position, button=button
+                    )
+                )
             _held.clear()
             _mouse_buttons.clear()
         elif kind in ("keydown", "keyup"):

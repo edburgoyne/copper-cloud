@@ -1,6 +1,6 @@
 # Browser-based Pygame studio: proof-of-concept report
 
-**Status: draft complete. Recommendation: Conditionally feasible.** Real Python and pygame-ce have executed the editor's example and the unchanged Dino Runner source in a user's browser. The user confirmed Dino's controls, Run/Stop/Restart, and stopping a non-yielding loop; Dino initially ran slowly but felt faster after the timing and rendering changes. A harmless security probe passed the specific checks below. Refresh during an active game, broader browser compatibility, and adversarial security testing remain outstanding.
+**Current status (2026-11-17): Phase 2 implementation and available verification are complete. Recommendation: Not ready for integration.** The current headed Chrome results and measurements are in section I. Earlier sections retain the proof-of-concept investigation and user-reported observations; section I supersedes their pending-test and readiness statements.
 
 ## A. Technical findings
 
@@ -54,11 +54,11 @@ The initial automated attempt used headless Chromium before the user's later hea
 | --- | --- |
 | A — Basic Pygame and keyboard | **Browser rendering passed:** the user reported the example working after a genuine pygame-ce frame appeared. **Node/Wasm input passed:** simulated Right input moved the shape from x≈319.5 to x≈335.5. The user also confirmed keyboard controls in Dino Runner; the basic example's arrow movement was not separately reported. |
 | B — Existing game | **Browser:** the user ran the original Dino Runner source unchanged and confirmed Space, Up Arrow, R, and Escape work. Dino initially ran slowly and took 10.35 s to first frame; after the adapter changes the user reported that it felt faster. Arial was unavailable and pygame used its default font. **Node/Wasm:** simulated Space moved the dinosaur's top from y=270 to y=231. The adapter changes runtime APIs and timing, so full gameplay equivalence is not established. |
-| C — Exception | **Browser and Node/Wasm passed:** a deliberate `ValueError` produced a traceback containing `main.py`. The user reported the browser console output was unwieldy because it also included a long JavaScript/Wasm stack. Error formatting has since been shortened and awaits browser retesting. |
+| C — Exception | **Browser and Node/Wasm passed:** a deliberate `ValueError` produced a traceback containing `main.py`. The Phase 2 headed Chrome test confirmed the shortened error panel, source line, technical details disclosure, and error-copy handler; see section I. |
 | D — Infinite loop | **Browser and Node/Wasm passed:** the user confirmed Stop ended the infinite-loop sample; in Node a separate worker terminated in 19 ms in one run. No Python exception is expected for valid infinite-loop code. A heartbeat warning was added; whether it appeared in the user's test was not reported. |
 | E — Repeated execution | **Browser:** the user reported that Run, Stop, and Restart function as intended and ran the example, exception, infinite loop, Dino Runner, and security probe in successive runs. **Node/Wasm:** separate workers ran different source texts with independent output. A specific browser test for leaked state between programs was not performed. |
 | F — Refresh | The user refreshed during troubleshooting and successfully ran programs afterward. Refresh during an active game and confirmation that its worker terminates were not explicitly tested. |
-| G — Browser compatibility | An initial headless Chromium run failed before Python started. A subsequent user-run browser test loaded Pyodide with the `data:` workaround, then exposed the CSP issue; after the CSP adjustment the user reported the example rendered. The browser and version were not recorded. Firefox was not installed for automated testing. |
+| G — Browser compatibility | The initial headless attempt failed before Python started. A later user-run browser loaded the `data:` workaround and exposed the CSP issue; after the CSP adjustment, the user confirmed a rendered example. Those historical browser/version details were not recorded. The current headed Chrome suite is documented in section I; Firefox remains unavailable. |
 | H — Security boundaries | **Browser, limited probe passed:** the user reported `document`, `localStorage`, and `parent` absent from the worker's `js` globals and `worker_origin null`. Requests to the local site and `example.com` were blocked by `connect-src`; a request to the runtime CDN returned 200. No real credentials were used. These checks do not prove resistance to all escapes, authenticated requests, or resource-exhaustion attacks. |
 
 The user confirmed that editor indentation and the console-copy button work after the update, liked the placement of the copy button, and confirmed that the network warnings explain the blocked requests clearly.
@@ -69,8 +69,8 @@ The unchanged site's existing checks also passed: 12 Python build tests and five
 
 ### Recorded browser observations
 
-- The example displayed a first frame after a reported **8.97 s** runtime initialization and **9.84 s** total. The user reported that the studio worked.
-- The deliberate exception displayed a Python traceback ending with `ValueError: The sample exception reached the console`, including the original `main.py` line numbers. The initial output also contained a long JavaScript/Wasm stack, which the user found disruptive; a shorter error format was added afterward and has not been separately confirmed.
+- The earlier user-run example displayed a first frame after a reported **8.97 s** runtime initialization and **9.84 s** total. The user reported that the studio worked. Controlled headed Chrome measurements are in section I.
+- The deliberate exception displayed a Python traceback ending with `ValueError: The sample exception reached the console`, including the original `main.py` line numbers. The initial output also contained a long JavaScript/Wasm stack, which the user found disruptive; the shorter error format was later confirmed by the headed Chrome suite in section I.
 - The `while True: pass` sample produced no Python exception, as expected, and the user confirmed that Stop worked. The worker heartbeat warning is a heuristic for a stalled worker, not proof of an infinite loop.
 - Dino Runner reported **8.56 s** to runtime readiness and **10.35 s** to its first frame in one attempt. It initially felt slow; after the frame-copy and timing changes, the user said it ran faster and confirmed Space, Up Arrow, R, and Escape. pygame warned that Arial was unavailable and used its default font.
 - The user confirmed indentation and Copy console, and reported roughly **10 s** for an initial load and **3–5 s** for later reloads. These are subjective observations rather than controlled benchmarks.
@@ -142,7 +142,7 @@ The following six files were downloaded into ignored `build/` for local tests. T
 | `pygame_ce-2.5.7-cp314-cp314-pyemscripten_2026_0_wasm32.whl` | 1,528,232 |
 | **Total** | **15,059,439 bytes (14.36 MiB)** |
 
-In one Node.js run using already downloaded local files, the interpreter initialized in about **1.36 s** and pygame-ce was ready in about **1.51 s** total. In one user-run browser attempt, the prototype reported **8.97 s** to runtime readiness and **9.84 s** to first frame. The browser had made earlier attempts, so its cache state is unknown; these are single observations, not cold-start benchmarks. Browser transfer size, memory use, and frame rate have not yet been measured.
+In one Node.js run using already downloaded local files, the interpreter initialized in about **1.36 s** and pygame-ce was ready in about **1.51 s** total. In one earlier user-run browser attempt, the prototype reported **8.97 s** to runtime readiness and **9.84 s** to first frame. The browser had made earlier attempts, so its cache state is unknown; these are single observations, not cold-start benchmarks. Section I later records headed Chrome frame rate and editor-page heap. Browser worker/Wasm memory, CPU, and actual transfer size remain unmeasured.
 
 The user reported an initial load of about 10 seconds and later reloads of about 3–5 seconds after the changes. Each run deliberately creates a fresh worker and initializes a new interpreter, even when browser downloads are cached. A future design could investigate a prewarmed spare worker, while measuring its memory cost and ensuring that runs never inherit another program's state.
 
@@ -153,17 +153,108 @@ Frames are transferred as uncompressed RGBA buffers. An 800×400 game produces 1
 | Approach | Pygame and dynamic code | Browser, hosting, and compilation | Reset, isolation, size, and licensing |
 | --- | --- | --- | --- |
 | Pygbag 0.9.3 | pygame-ce and CPython/Wasm; dynamic source can be fed to its interpreter with additional integration. Existing project packages each game ahead of publication. | Static hosting works; no server-side compilation is inherently required for already available browser-compatible source and runtime. Browser-specific behavior for a new editor is untested. | Normal SDL rendering is tied to a page thread; robust interruption of non-yielding code and isolation need additional design. Runtime transfer and startup were not measured here. Pygbag itself is MIT licensed; audit its CPython, pygame-ce, SDL, and other bundled component licenses before redistribution. |
-| Pyodide + worker adapter, this experiment | Real pygame-ce surfaces and dynamically supplied CPython code; display/input/timing are adapted and incomplete, audio and asset uploads are unsupported. | Static files plus CDN; no Python backend or per-program server compilation. A user-run browser rendered the example; cross-browser testing remains outstanding. Chrome/Firefox/Safari are documented Pyodide targets. | Disposable workers stopped a non-yielding loop in both the user-run browser and Node tests. Local file sizes and measured timings are above. Pyodide is MPL-2.0, CPython uses the PSF license, and pygame-ce is LGPL-2.1; review notices and redistribution obligations. |
+| Pyodide + worker adapter, this experiment | Real pygame-ce surfaces and dynamically supplied CPython code; display/input/timing are adapted and incomplete, audio and asset uploads are unsupported. | Static files plus CDN; no Python backend or per-program server compilation. The headed Chrome smoke suite is in section I; Firefox and broader cross-browser testing remain outstanding. Chrome/Firefox/Safari are documented Pyodide targets. | Disposable workers stopped a non-yielding loop in the browser and Node tests. Local file sizes and measured timings are above. Pyodide is MPL-2.0, CPython uses the PSF license, and pygame-ce is LGPL-2.1; review notices and redistribution obligations. |
 | Python Arena | Open-source teaching system using Pyodide and real pygame-ce with a much larger display/input shim; it replays interactions and silences sound, so it is not identical to live Pygbag gameplay. | Runs locally in the browser using a worker and static assets; its site reports a roughly 6 MB core and 1.5 MB pygame download, not measurements of this prototype. Browser support and timing were not independently tested here. | Workers are terminated on timeout and restarted; the site's code is MIT licensed, while its lesson content has separate CC BY-NC-SA terms. Study its security model before reuse. Sources: [project source](https://github.com/AntonyPerez0/pythonarena), [about and licenses](https://pythonarena.org/about/). |
 
 ## G. Recommendation
 
-**Conditionally feasible.** A user's browser has started the sandboxed runtime, executed the editor example and Dino Runner, accepted Dino's keyboard controls, stopped a non-yielding loop, and passed the limited isolation probes above. State separation, refresh, broader compatibility, and adversarial isolation checks remain outstanding. The adapter's restricted APIs and relaxed sandbox CSP require further design before a student-facing feature is appropriate.
+**Not ready for integration.** The later Phase 2 suite verifies lifecycle behavior and selected security boundaries in headed Chrome, and measures representative workloads. Firefox coverage, low-powered-device measurements, a dedicated-origin hosting/security design, and enforceable resource limits remain open. The adapter's limited compatibility and relaxed sandbox CSP require a security review before student-facing use.
 
 ## H. Next steps
 
-1. Finish manual browser checks for state separation, refresh during a running game, the shortened exception output, and the heartbeat warning.
-2. Repeat cases A–H in identified Chromium and Firefox versions, including dummy-credential/network fixtures. Measure cold/warm transfers, first frame, frame rate, and memory on a representative student device.
-3. Expand or replace the display/input adapter only after deciding which Pygame APIs, assets, fonts, sound, and timing differences can be supported. Compare actual gameplay with Pygbag, not just startup.
-4. Put execution on a dedicated origin with no credentials, HTTP-level security headers and validated CORS; review all cross-origin messages, egress, worker cleanup, and denial-of-service behavior.
-5. Review runtime supply-chain integrity, version updates, and license notices before redistribution or public release.
+1. Review the `unsafe-eval` requirement, CDN egress, and a dedicated execution origin with no Copper Cloud or Supabase credentials. Define HTTP security headers and CORS before public integration.
+2. Run the browser suite in Firefox when available; measure memory, CPU, and download transfer size with browser tooling and repeat on a low-powered device.
+3. Add compatibility tests or keep unverified timers, modifiers, event-queue semantics, display modes, custom assets/fonts, broader sprite operations, and audio explicitly unsupported.
+4. Review supply-chain integrity, version updates, and license notices before redistribution or public release.
+
+## I. Phase 2 runtime hardening update (2026-11-17)
+
+This update was implemented only in the isolated experiment. It did not modify the arcade pages, game manifest, Pygbag workflow, Supabase, or authentication.
+
+### Changes and automated results
+
+- Python exceptions now have a compact student-facing panel with error class, deterministic explanation, source line where available, and a shortened Python traceback. Raw diagnostics are available in a collapsed details panel. Runtime/security warnings are separated from normal output.
+- The sandbox terminates its worker after normal completion and errors, as well as on Stop or replacement. Input messages are checked for known shapes and coordinate/key bounds. Input overflow and focus loss clear held state and emit release events.
+- The Node/Wasm suite now tests drawing, `Rect`, transforms, alpha, sprite groups, generated virtual-filesystem image loading, fallback/default fonts, display flip/update, Clock, keyboard/mouse events, focus-loss release, errors, non-yielding worker termination, and state isolation across fresh workers. It also verifies the Python error formatter's type, explanation, line, traceback, and technical diagnostics.
+- Created `docs/GAME_CREATION_GUIDE.md` for students and `docs/AI_GAME_STUDIO_INSTRUCTIONS.md` for assistants. Both describe the experimental runtime separately from the Pygbag publishing pipeline and limit compatibility claims to tested behavior.
+- A headed Chromium test harness using the built-in Chrome DevTools Protocol was added because Playwright and Playwright MCP were unavailable in the environment. Google Chrome 157.0.8103.79 passed the suite below. Firefox is unavailable.
+
+The full Node/Wasm functional suite passed. After the experiment changes, the repository's Python suite passed (12 tests), and its frontend JavaScript suite passed (five tests). JavaScript syntax checks and `git diff --check` also passed.
+
+### Headed Chromium test results
+
+The suite ran a visible Chrome window over loopback HTTP using CDP (not Playwright). All 14 checks passed:
+
+- Game A to Game B discarded Python globals, display state, held keyboard state, and mouse button state.
+- Refresh during a running program removed the old worker target, reloaded the editor, and allowed a new run.
+- A `ValueError` showed its type, explanation, source line, and traceback; technical diagnostics opened on request. The error/output copy handlers supplied the expected text to an instrumented clipboard stub; operating-system clipboard permissions were not tested.
+- The editor ran after an exception and Restart; the stalled-worker warning described a possibility and Stop terminated a synchronous loop.
+- Keyboard focus entering the preview worked, moving focus away generated a key release, mouse clicks mapped to Pygame surface coordinates, and Tab indentation produced runnable code.
+- The harmless worker probe found `document`, `localStorage`, and `parent` unavailable and the worker origin opaque. Chrome blocked fetches to the local site and `example.com`; the configured jsDelivr URL returned HTTP 200.
+
+This is a headed browser smoke suite on one development computer, not cross-browser certification. It used no real credentials. The runtime CDN is an allowed egress destination and can receive code-chosen request data; these observations do not prove complete data-loss prevention.
+
+### Headed Chromium performance sample
+
+Chrome was started with a fresh temporary profile. “Repeat” uses the same profile after the first run. Runtime-ready and first-frame times are measured from Run; frame intervals are timestamped at the editor canvas `putImageData` call over a 2.5-second sample. Main-page heap does not include the worker's Wasm heap. Stop timing measures Stop click to the UI's stopped state.
+
+| Workload | Runtime ready | First frame | FPS | Mean / p95 frame interval | Jitter (std dev) | Editor-page JS heap | Stop to UI |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Moving shape, fresh profile | 8.94 s | 9.06 s | 22.9 | 43.75 / 50.6 ms | 7.41 ms | 2.9 MiB | 2.6 ms |
+| Moving shape, same-profile repeat | 5.89 s | 6.00 s | 22.0 | 45.38 / 51.3 ms | 6.98 ms | 4.8 MiB | 2.7 ms |
+| Dino Runner | 8.14 s | 8.41 s | 19.8 | 50.57 / 53.7 ms | 9.47 ms | 11.7 MiB | 4.1 ms |
+| Moderate draw workload | 7.65 s | 7.78 s | 20.7 | 48.39 / 52.6 ms | 4.73 ms | 5.6 MiB | 1.3 ms |
+
+These are single short measurements from Windows 11 build 26200, Intel Core 7 250U (12 logical cores), and 32 GiB RAM, using Chrome 157.0.8103.79. CPU, worker/Wasm memory, compressed runtime network transfer, and low-powered-device behavior were not measured. The repeated run was faster, but this is not a controlled before/after optimization study.
+
+### Development-host measurements
+
+The separate `tools/benchmark-runtime.mjs` run used Node 24.14.1, Pyodide 314.0.7, pygame-ce 2.5.7, Windows 11 build 26200, Intel Core 7 250U (12 logical cores), and 32 GiB RAM. These values are from local runtime files and worker-to-Node frame transfers; they do not measure browser canvas rendering or a Chromebook.
+
+| Workload | Runtime ready | First frame | FPS | Mean / p95 frame interval | Approx. wasm heap | Stop |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| First local-runtime moving shape | 1.58 s | 1.62 s | 20.4 | 49.08 / 52.33 ms | 36 MiB | 17 ms |
+| Warm moving shape | 1.49 s | 1.52 s | 20.8 | 48.14 / 53.38 ms | 36 MiB | 12 ms |
+| Dino Runner | 1.64 s | 1.71 s | 19.8 | 50.63 / 67.08 ms | 36 MiB | 20 ms |
+| Moderate draw/transform sample | 1.56 s | 1.60 s | 21.0 | 47.73 / 51.61 ms | 36 MiB | 16 ms |
+
+Three extra restart-to-first-frame measurements were 1.53–1.56 s; worker termination was 9–11 ms. Whole Node-process RSS during samples was 186–210 MiB; process CPU estimates were 12.5–21.8%. The local runtime files total 15,059,439 bytes (14.36 MiB) before network compression. These were single short samples. They are not browser, low-powered-device, or before/after optimization comparisons.
+
+### Compatibility classifications
+
+The test evidence and detailed limits are in [`../../docs/GAME_CREATION_GUIDE.md`](../../docs/GAME_CREATION_GUIDE.md). In summary, the Node/Wasm-tested subset includes Pygame surfaces/drawing, `Rect`, scale/rotate, alpha blending, basic sprites, basic display surface/flip, generated image load from the virtual filesystem, default/fallback fonts, Clock delta, yielded async loops, and the exercised key/mouse inputs. Partial or untested behavior includes display flags and dirty rectangles, resizing/fullscreen, full keyboard/modifier mapping, exact event-queue semantics, timers, custom asset/font upload, broader sprite APIs, and all audio/autoplay behavior. This is not full pygame-ce compatibility.
+
+### Security and readiness
+
+The iframe remains sandboxed without `allow-same-origin`; Python executes in a disposable worker, not on a server. Chrome verified the tested local/external request blocks and the configured CDN request. The worker input/frame/output boundaries have additional bounds and checks. The iframe still requires `unsafe-eval` for pygame-ce's dynamic runtime behavior, and the runtime CDN remains an allowed network destination. Firefox policy enforcement and broader egress paths remain unverified. There is no enforceable hard browser memory quota or CPU limit.
+
+**Historical recommendation before the fixed-code demo: not ready for arbitrary user-written Python.** The following section records the later fixed-source integration and supersedes the earlier recommendation for this limited demonstration.
+
+## J. Fixed-source public preview integration (2026-11-17)
+
+### Public behavior
+
+- Added a WIP Game Studio page to the static site navigation. It displays the original Dino Runner Python in a native read-only text area that supports selection, scrolling, and copying.
+- Run, Stop, and Restart use the existing Pyodide/pygame-ce runtime. The page's sample display and the embedded sandbox source are generated from the original games/site_games/dino-runner/main.py file, and the site checker verifies an exact byte match.
+- The host sends only the allowlisted sample ID. The public sandbox bundle has no arbitrary-source start path. Editor contents, query parameters, storage values, and code fields in application messages are not passed as executable Python.
+- The experimental editable prototype is not included in the assembled site. There is no editor submission, upload, save, login, or account feature.
+
+### Security assessment and limits
+
+Repository and built-page checks found no Supabase client, auth/session integration, site credentials, or privileged application API for the runner to access. The public site is static and has no backend or authenticated data. No concrete credential or privilege exposure was found in the same-origin GitHub Pages setup, so the fixed-source demonstration was enabled.
+
+The execution document remains in an iframe sandbox without allow-same-origin and communicates through validated messages. Each run gets a disposable worker. The restrictive CSP meta policy is scoped to that sandbox document; the main website policy was not changed. The worker runtime still needs unsafe-eval and can connect to jsDelivr. The CDN is a permitted network destination. The policy is not an HTTP response-header policy, and the browser does not provide a hard CPU or memory quota here.
+
+These controls prevent ordinary page interactions from selecting arbitrary Python, but they do not prevent a technically capable visitor from changing locally executed code with browser tools or a modified local copy. This preview does not establish a security boundary for future arbitrary user-written Python. Do not place credentials or authenticated data in the runtime. A later public code editor needs a separate security and hosting design.
+
+### Verification
+
+- Assembled the site from the canonical Dino Runner source and passed scripts/check_site.py.
+- Repository suite: 12 passed. Frontend suite: 7 passed. Real Node/Wasm Pyodide/pygame-ce suite passed.
+- Headed Google Chrome 157.0.8103.79 passed all 23 recorded checks in the extended CDP browser harness.
+- Public checks covered read-only typing, source selection/copy, mobile layout, fixed execution after DOM editor mutation and URL/storage values, iframe sandbox/opaque origin, Space jump, Stop, fresh-worker Restart, repeated runs, refresh cleanup, and application messages with both an unapproved sample ID and a code override.
+- Error recovery was checked by making the local test server alter one sandbox response to send a one-time runtime startup error, then running again against the unmodified assembled runtime. This is a deterministic UI recovery test, not a CDN outage test.
+- The same headed run tested the experimental editor lifecycle, input, exception handling, worker cleanup, and selected CSP/network boundaries. Chrome allowed the configured jsDelivr request and blocked the tested local-site and example.com requests. This limited probe is not proof of complete egress control.
+- Firefox and a low-powered student device were unavailable. The browser suite is a smoke test, not a security certification.
+
+No workflow, authentication, Supabase, push, or deployment change was made. The current public entry can be withdrawn using the steps in experiments/browser-pygame-studio/REMAINING_WORK.md.

@@ -4,6 +4,8 @@ Copper Cloud is a static browser arcade for playing Pygame games and learning to
 
 ## Project layout
 
+The Game Studio (WIP) page is a read-only, playable preview of one bundled Dino Runner sample using the experimental Pyodide/Pygame worker runtime. Copper Cloud remains a static site with no backend, accounts, or submission service.
+
 ```text
 games/manifest.json             # game metadata and publishing status
 games/site_games/<game-id>/     # Python source, optional assets, and cover
@@ -13,6 +15,7 @@ scripts/assemble_site.py        # assemble the static site and registry
 scripts/check_site.py           # validate generated site files and links
 site-assets/                    # shared CSS, JavaScript, and replaceable SVGs
 index.html, games.html, play.html, create.html, about.html
+game-studio.html                # fixed-source, playable Game Studio preview (WIP)
 GAME_CREATION_GUIDE.md          # student-facing downloadable guide
 tests/                          # build pipeline tests
 .github/workflows/pygbag.yml    # existing build and GitHub Pages deployment
@@ -44,6 +47,10 @@ python -m pip install pygbag==0.9.3
 
 ## Validate, build, and preview
 
+The assembled preview is available at /game-studio.html. Its Run and Restart controls always start the bundled Dino Runner sample. The visible Python source can be selected and copied, but cannot be edited through the page.
+
+Open this page from the assembled build, not the repository root: the runner script and sandbox are generated under build/site/site-assets/game-studio-runtime/. Serving the source-root game-studio.html with Live Server returns a 404 page for the JavaScript file, which then appears as a script MIME-type error. After building, use the local server command below and visit http://localhost:8080/game-studio.html.
+
 Run these from the repository root:
 
 ```sh
@@ -61,6 +68,10 @@ Open `http://localhost:8080/`. Serve the assembled site over HTTP rather than op
 Pygbag downloads its browser template during a fresh build, and the games load their WebAssembly runtime from Pygbag's CDN. Internet access is needed. Some local Pygbag configurations use its development server as a package proxy; if the browser requests `localhost:8000`, run `python -m pygbag build/game-apps/battle-royale` in a second terminal while previewing. A successful build confirms the output exists; actually play the game in a browser to verify gameplay.
 
 The assembler stages a complete site before replacing `build/site/`, checks for required game builds first, and preserves the previous site if assembly fails. The build tests use temporary fixture repositories.
+
+## Game Studio preview security
+
+The public preview has no login, saved projects, uploads, or submission API. Its Python runs locally in a disposable worker inside a sandboxed iframe. These browser-side controls are intended for this fixed demonstration; they are not a security boundary against a visitor who changes code in their own browser. See [the experimental runtime guide](docs/GAME_CREATION_GUIDE.md) and [remaining work](experiments/browser-pygame-studio/REMAINING_WORK.md) for tested behavior and limits.
 
 ## Add a game
 

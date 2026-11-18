@@ -7,6 +7,9 @@ const test = require("node:test");
 const vm = require("node:vm");
 
 const source = fs.readFileSync(path.join(__dirname, "../site-assets/site.js"), "utf8");
+const studioPage = fs.readFileSync(path.join(__dirname, "../game-studio.html"), "utf8");
+const studioHost = fs.readFileSync(path.join(__dirname, "../experiments/browser-pygame-studio/studio.js"), "utf8");
+const studioSandbox = fs.readFileSync(path.join(__dirname, "../experiments/browser-pygame-studio/sandbox.html"), "utf8");
 const games = [
   { id: "dino", title: "Dino Runner", category: "Arcade", description: "Jump over cacti", creator: "Cloud", controls: ["Space: jump"], aspect_ratio: [800, 400], featured: true, thumbnail: "./dino.svg", thumbnail_alt: "A dinosaur", page_url: "./play.html?game=dino", url: "./games/live_games/dino/" },
   { id: "battle", title: "Battle Royale", category: "Action", description: "Survive the storm", creator: "Cloud", controls: ["WASD: move"], aspect_ratio: [900, 600], featured: false, thumbnail: "./battle.svg", thumbnail_alt: "An arena", page_url: "./play.html?game=battle", url: "./games/live_games/battle/" },
@@ -144,4 +147,26 @@ test("compact navigation exposes and closes its menu", async () => {
   node("document").dispatch("keydown", { key: "Escape" });
   assert.equal(toggle.getAttribute("aria-expanded"), "false");
   assert.equal(toggle.focused, true);
+});
+
+test("Game Studio is discoverable and presents a read-only playable sample", () => {
+  for (const filename of ["index.html", "games.html", "play.html", "create.html", "about.html", "game-studio.html"]) {
+    const page = fs.readFileSync(path.join(__dirname, `../${filename}`), "utf8");
+    assert.match(page, /href="\.\/game-studio\.html"/);
+  }
+  assert.ok((fs.readFileSync(path.join(__dirname, "../games.html"), "utf8").match(/href="\.\/game-studio\.html"/g) || []).length >= 2);
+  assert.match(studioPage, /GAME STUDIO — WORK IN PROGRESS/);
+  assert.match(studioPage, /id="code"[^>]*readonly/);
+  assert.match(studioPage, /id="run"/);
+  assert.match(studioPage, /id="stop"/);
+  assert.match(studioPage, /id="restart"/);
+  assert.match(studioPage, /data-studio-mode="fixed-demo"/);
+  assert.doesNotMatch(studioPage, /contenteditable|<form/i);
+});
+
+test("public demo requests only the bundled sample ID and sandbox rejects arbitrary code messages", () => {
+  assert.match(studioHost, /const demoSampleId = "dino-runner"/);
+  assert.match(studioHost, /type: "start-demo", sample: demoSampleId/);
+  assert.match(studioSandbox, /message\.type === "start-demo"[\s\S]{0,120}message\.sample === "dino-runner"/);
+  assert.match(studioSandbox, /message\.type === "start" && !PUBLIC_DEMO_BUNDLE/);
 });

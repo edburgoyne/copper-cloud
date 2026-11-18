@@ -15,7 +15,31 @@ let watchdog = null;
 let monitoring = false;
 let lastHeartbeat = 0;
 let warned = false;
+// Replaced only in the assembled public demo. The editor prototype keeps this null.
+const PUBLIC_DEMO_BUNDLE = null;
 function send(message, transfer = []) { parent.postMessage(message, "*", transfer); }
+function stopWorker() {
+  monitoring = false;
+  if (watchdog) clearInterval(watchdog);
+  watchdog = null;
+  if (worker) worker.terminate();
+  worker = null;
+}
+function validInput(input) {
+  if (!input || typeof input !== "object" || typeof input.type !== "string") return false;
+  if (input.type === "blur") return true;
+  if (input.type === "keydown" || input.type === "keyup") {
+    return typeof input.code === "string" && input.code.length <= 32 &&
+      typeof input.key === "string" && input.key.length <= 32 &&
+      typeof input.repeat === "boolean";
+  }
+  if (["mousemove", "mousedown", "mouseup"].includes(input.type)) {
+    return Number.isInteger(input.x) && input.x >= 0 && input.x < 1280 &&
+      Number.isInteger(input.y) && input.y >= 0 && input.y < 960 &&
+      Number.isInteger(input.button) && input.button >= 0 && input.button <= 8;
+  }
+  return false;
+}
 addEventListener("securitypolicyviolation", (event) => {
   const directive = String(event.effectiveDirective || event.violatedDirective || "security policy");
   const text = directive.startsWith("worker-src")
@@ -24,12 +48,75 @@ addEventListener("securitypolicyviolation", (event) => {
   send({ type: "warning", text });
 });
 function stop() {
-  if (watchdog) clearInterval(watchdog);
-  watchdog = null;
-  monitoring = false;
+  stopWorker();
   warned = false;
-  if (worker) worker.terminate();
-  worker = null;
+}
+function launchWorker(runtime, code) {
+  try {
+    // Chromium can fail silently for blob: module workers in opaque-origin
+    // frames. A self-contained data: module retains isolation and starts there.
+    const workerModule = `${runtime.workerSource}\n${runtime.errorFormatter}`;
+    const workerURL = `data:text/javascript;charset=utf-8,${encodeURIComponent(workerModule)}`;
+    worker = new Worker(workerURL, { type: "module", name: "copper-studio-game" });
+    worker.onmessage = (workerEvent) => {
+      const result = workerEvent.data;
+      if (!result || typeof result !== "object") return;
+      if (result.type === "heartbeat") {
+        lastHeartbeat = performance.now();
+        if (monitoring && warned) {
+          warned = false;
+          send({ type: "status", text: "The program is responding again." });
+        }
+        return;
+      }
+      if (!monitoring && result.type === "status" && typeof result.text === "string" && result.text.startsWith("Running program.")) {
+        monitoring = true;
+        lastHeartbeat = performance.now();
+        watchdog = setInterval(() => {
+          if (monitoring && !warned && performance.now() - lastHeartbeat > 3500) {
+            warned = true;
+            send({ type: "warning", text: "The program may be stuck or busy. Press Stop to end it." });
+          }
+        }, 1000);
+      }
+      if (result.type === "frame" && Number.isInteger(result.width) && Number.isInteger(result.height) &&
+          result.width > 0 && result.height > 0 && result.width <= 1280 && result.height <= 960 &&
+          result.pixels instanceof ArrayBuffer && result.pixels.byteLength === result.width * result.height * 4) {
+        send(result, [result.pixels]);
+      } else if (result.type === "python-error" &&
+                 typeof result.errorType === "string" && typeof result.explanation === "string" &&
+                 typeof result.traceback === "string" && typeof result.technical === "string" &&
+                 (result.lineNumber === null || Number.isInteger(result.lineNumber)) &&
+                 (result.sourceLine === null || typeof result.sourceLine === "string")) {
+        send({
+          type: result.type,
+          errorType: result.errorType.slice(0, 100),
+          explanation: result.explanation.slice(0, 1000),
+          lineNumber: result.lineNumber,
+          sourceLine: result.sourceLine?.slice(0, 2000) ?? null,
+          traceback: result.traceback.slice(0, 12000),
+          technical: result.technical.slice(0, 24000),
+        });
+        stopWorker();
+      } else if (["status", "output", "error", "done", "warning"].includes(result.type) && typeof result.text === "string") {
+        send({
+          type: result.type,
+          text: result.text.slice(0, 8192),
+          technical: typeof result.technical === "string" ? result.technical.slice(0, 24000) : "",
+          elapsed: Number(result.elapsed) || 0,
+        });
+        if (result.type === "error" || result.type === "done") stopWorker();
+      }
+    };
+    worker.onerror = (error) => {
+      stopWorker();
+      send({ type: "error", text: `Worker failed: ${error.message || "unknown error"}. Check the browser Console for the underlying error.` });
+    };
+    worker.postMessage({ type: "start", code, bootstrap: runtime.bootstrap });
+  } catch (error) {
+    stop();
+    send({ type: "error", text: `Could not create the worker: ${error.message}` });
+  }
 }
 addEventListener("message", (event) => {
   if (event.source !== parent || !event.data || typeof event.data !== "object") return;
@@ -37,62 +124,24 @@ addEventListener("message", (event) => {
   if (message.type === "stop") {
     stop();
     send({ type: "stopped" });
-  } else if (message.type === "input" && worker) {
+  } else if (message.type === "input" && worker && validInput(message.input)) {
     worker.postMessage({ type: "input", input: message.input });
-  } else if (message.type === "start" && !worker &&
+  } else if (message.type === "start-demo" && !worker && PUBLIC_DEMO_BUNDLE &&
+             message.sample === "dino-runner" &&
+             typeof PUBLIC_DEMO_BUNDLE.samples?.[message.sample] === "string" &&
+             PUBLIC_DEMO_BUNDLE.samples[message.sample].length <= 102400) {
+    const runtime = PUBLIC_DEMO_BUNDLE.runtime;
+    if (runtime && typeof runtime.workerSource === "string" && runtime.workerSource.length < 100000 &&
+        typeof runtime.errorFormatter === "string" && runtime.errorFormatter.length < 100000 &&
+        typeof runtime.bootstrap === "string" && runtime.bootstrap.length < 100000) {
+      launchWorker(runtime, PUBLIC_DEMO_BUNDLE.samples[message.sample]);
+    }
+  } else if (message.type === "start" && !PUBLIC_DEMO_BUNDLE && !worker &&
              typeof message.workerSource === "string" && message.workerSource.length < 100000 &&
+             typeof message.errorFormatter === "string" && message.errorFormatter.length < 100000 &&
              typeof message.bootstrap === "string" && message.bootstrap.length < 100000 &&
              typeof message.code === "string" && message.code.length <= 102400) {
-    try {
-      // Chromium can fail silently for blob: module workers in opaque-origin
-      // frames. A self-contained data: module retains isolation and starts there.
-      const workerURL = `data:text/javascript;charset=utf-8,${encodeURIComponent(message.workerSource)}`;
-      worker = new Worker(workerURL, { type: "module", name: "copper-studio-game" });
-      worker.onmessage = (workerEvent) => {
-        const result = workerEvent.data;
-        if (!result || typeof result !== "object") return;
-        if (result.type === "heartbeat") {
-          lastHeartbeat = performance.now();
-          if (monitoring && warned) {
-            warned = false;
-            send({ type: "status", text: "The program is responding again." });
-          }
-          return;
-        }
-        if (!monitoring && result.type === "status" && typeof result.text === "string" && result.text.startsWith("Running program.")) {
-          monitoring = true;
-          lastHeartbeat = performance.now();
-          watchdog = setInterval(() => {
-            if (monitoring && !warned && performance.now() - lastHeartbeat > 3500) {
-              warned = true;
-              send({ type: "warning", text: "The program may be stuck or busy. Press Stop to end it." });
-            }
-          }, 1000);
-        }
-        if (result.type === "done" || result.type === "error") {
-          monitoring = false;
-          if (watchdog) clearInterval(watchdog);
-          watchdog = null;
-        }
-        if (result.type === "frame" && Number.isInteger(result.width) && Number.isInteger(result.height) &&
-            result.width > 0 && result.height > 0 && result.width <= 1280 && result.height <= 960 &&
-            result.pixels instanceof ArrayBuffer && result.pixels.byteLength === result.width * result.height * 4) {
-          send(result, [result.pixels]);
-        } else if (["status", "output", "error", "done", "warning"].includes(result.type) && typeof result.text === "string") {
-          send({ type: result.type, text: result.text.slice(0, 8192), elapsed: Number(result.elapsed) || 0 });
-        }
-      };
-      worker.onerror = (error) => {
-        monitoring = false;
-        if (watchdog) clearInterval(watchdog);
-        watchdog = null;
-        send({ type: "error", text: `Worker failed: ${error.message || "unknown error"}. Check the browser Console for the underlying error.` });
-      };
-      worker.postMessage({ type: "start", code: message.code, bootstrap: message.bootstrap });
-    } catch (error) {
-      stop();
-      send({ type: "error", text: `Could not create the worker: ${error.message}` });
-    }
+    launchWorker(message, message.code);
   }
 });
 send({ type: "sandbox-ready" });

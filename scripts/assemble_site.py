@@ -11,7 +11,54 @@ from manifest_utils import load_manifest, resolve_manifest_path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SITE_FILES = ("index.html", "games.html", "play.html", "create.html", "about.html", "GAME_CREATION_GUIDE.md")
+SITE_FILES = ("index.html", "games.html", "play.html", "create.html", "about.html", "game-studio.html", "GAME_CREATION_GUIDE.md")
+
+
+def build_game_studio_runtime(root, staged_site):
+    """Bundle the existing worker runtime with the one approved public sample."""
+    runtime_source = root / "experiments" / "browser-pygame-studio"
+    sample_path = root / "games" / "site_games" / "dino-runner" / "main.py"
+    sandbox_template = runtime_source / "sandbox.html"
+    required = (
+        runtime_source / "studio.js",
+        runtime_source / "worker.mjs",
+        runtime_source / "error-format.mjs",
+        runtime_source / "pygame_bridge.py",
+        sandbox_template,
+        sample_path,
+    )
+    missing = [path for path in required if not path.is_file()]
+    if missing:
+        raise SystemExit(f"Game Studio runtime input is missing: {missing[0]}")
+
+    bundle = {
+        "runtime": {
+            "workerSource": (runtime_source / "worker.mjs").read_text(encoding="utf-8"),
+            "errorFormatter": (runtime_source / "error-format.mjs").read_text(encoding="utf-8"),
+            "bootstrap": (runtime_source / "pygame_bridge.py").read_text(encoding="utf-8"),
+        },
+        "samples": {
+            "dino-runner": sample_path.read_text(encoding="utf-8"),
+        },
+    }
+    if len(bundle["samples"]["dino-runner"].encode("utf-8")) > 102400:
+        raise SystemExit("The approved Game Studio sample exceeds the 100 KiB source limit.")
+
+    template = sandbox_template.read_text(encoding="utf-8")
+    marker = "const PUBLIC_DEMO_BUNDLE = null;"
+    if template.count(marker) != 1:
+        raise SystemExit("Game Studio sandbox must contain exactly one public demo bundle marker.")
+    serialized = json.dumps(bundle, ensure_ascii=True, separators=(",", ":"))
+    serialized = serialized.replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
+    public_sandbox = template.replace(marker, f"const PUBLIC_DEMO_BUNDLE = {serialized};", 1)
+
+    runtime_output = staged_site / "site-assets" / "game-studio-runtime"
+    runtime_output.mkdir(parents=True, exist_ok=True)
+    (runtime_output.parent / "game-studio-sample.py").write_text(
+        bundle["samples"]["dino-runner"], encoding="utf-8"
+    )
+    (runtime_output / "sandbox.html").write_text(public_sandbox, encoding="utf-8")
+    shutil.copy2(runtime_source / "studio.js", runtime_output / "studio.js")
 
 
 def assemble_site(root=ROOT):
@@ -80,6 +127,7 @@ def assemble_site(root=ROOT):
         for filename in SITE_FILES:
             shutil.copy2(root / filename, staged_site / filename)
         shutil.copytree(root / "site-assets", staged_site / "site-assets", dirs_exist_ok=True)
+        build_game_studio_runtime(root, staged_site)
         (staged_site / "games.json").write_text(
             json.dumps(public_games, indent=2, ensure_ascii=False) + "\n",
             encoding="utf-8",

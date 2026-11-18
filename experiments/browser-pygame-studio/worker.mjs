@@ -21,9 +21,13 @@ function policyWarning(event) {
 }
 addEventListener("securitypolicyviolation", (event) => send("warning", policyWarning(event)));
 const pendingInput = [];
+const MAX_PENDING_INPUT = 128;
 let lastFrame = 0;
 setInterval(() => postMessage({ type: "heartbeat" }), 1000);
-globalThis.studio_take_input = () => JSON.stringify(pendingInput.splice(0));
+globalThis.studio_take_input = () => {
+  const input = pendingInput.splice(0);
+  return JSON.stringify(input);
+};
 globalThis.studio_should_render = () => performance.now() - lastFrame >= 1000 / 30;
 globalThis.studio_present = (width, height, pythonBytes) => {
   const now = performance.now();
@@ -44,7 +48,18 @@ addEventListener("message", async (event) => {
   const message = event.data;
   if (!message || typeof message !== "object") return;
   if (message.type === "input") {
-    if (pendingInput.length < 128 && message.input && typeof message.input === "object") pendingInput.push(message.input);
+    const input = message.input;
+    if (!input || typeof input !== "object" || typeof input.type !== "string") return;
+    if (input.type === "blur") {
+      pendingInput.length = 0;
+      pendingInput.push({ type: "blur" });
+    } else if (pendingInput.length < MAX_PENDING_INPUT) {
+      pendingInput.push(input);
+    } else if (input.type === "keyup" || input.type === "mouseup") {
+      // Clear held input first so overflow cannot leave a key or button stuck.
+      pendingInput.length = 0;
+      pendingInput.push({ type: "blur" }, input);
+    }
     return;
   }
   if (message.type !== "start" || startedProgram) return;
@@ -64,11 +79,20 @@ addEventListener("message", async (event) => {
     await pyodide.runPythonAsync("await studio_execute(__studio_source)");
     send("done", "Program finished.");
   } catch (error) {
-    // PythonError's message includes its traceback; .stack appends noisy Wasm/JS frames.
-    const detail = String(error);
+    // Keep Python's traceback distinct from JavaScript/WebAssembly diagnostics.
+    const detail = String(error?.message ?? error);
     if (/\b(?:SecurityError|NotAllowedError|PermissionError)\b|content security policy|permission denied/i.test(detail)) {
       send("warning", "Access was denied by a browser or runtime restriction. Check the error below and use only supported files, permissions, and network destinations.");
     }
-    send("error", detail);
+    if (/PythonError|Traceback \(most recent call last\)|File ["']main\.py["']/.test(detail)) {
+      try {
+        const formatted = globalThis.studio_format_python_error(error, message.code);
+        postMessage({ type: "python-error", ...formatted });
+      } catch (formatError) {
+        send("error", `Python error could not be formatted: ${String(formatError?.message ?? formatError)}`);
+      }
+    } else {
+      postMessage({ type: "error", text: detail.slice(0, 8192), technical: String(error?.stack ?? error).slice(0, 24000) });
+    }
   }
 });

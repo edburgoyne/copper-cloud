@@ -15,5 +15,12 @@ button:disabled { cursor: default; opacity: .5; }
 canvas { display: block; max-width: 100%; height: auto; }
 .console-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }.console-heading h2 { margin-bottom: 0; }.console-heading button { padding: 6px 11px; font-size: 12px; } #copy-status { min-height: 1.5em; margin: 4px 0; }
 #console { min-height: 140px; max-height: 270px; overflow: auto; padding: 12px; border: 1px solid #66594f; background: #101213; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.4 Consolas, monospace; }
+.error-panel, .diagnostic-summary { margin-top: 14px; padding: 12px; border: 1px solid #a65d53; border-radius: 4px; background: #271817; }
+.error-panel h3 { margin: 0 0 8px; font-size: 16px; }
+.error-panel p, .diagnostic-summary { color: #ffd4c9; }
+#error-location { font-weight: 650; }
+#error-traceback, #runtime-console { max-height: 240px; overflow: auto; padding: 10px; background: #101213; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.4 Consolas, monospace; }
+#runtime-details { margin-top: 12px; color: #d5c5b9; font-size: 13px; }
+#runtime-details summary { cursor: pointer; }
 a { color: #efba89; } :focus-visible { outline: 3px solid #efba89; outline-offset: 3px; }
 @media (max-width: 850px) { .workspace { grid-template-columns: 1fr; } textarea { min-height: 300px; } }

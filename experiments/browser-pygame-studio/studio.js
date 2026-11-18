@@ -10,8 +10,24 @@ const restartButton = document.querySelector("#restart");
 const copyButton = document.querySelector("#copy-console");
 const copyStatus = document.querySelector("#copy-status");
 const editorStatus = document.querySelector("#editor-status");
+const errorPanel = document.querySelector("#python-error");
+const errorHeading = document.querySelector("#error-heading");
+const errorExplanation = document.querySelector("#error-explanation");
+const errorLocation = document.querySelector("#error-location");
+const errorTraceback = document.querySelector("#error-traceback");
+const errorCopyStatus = document.querySelector("#error-copy-status");
+const diagnosticSummary = document.querySelector("#diagnostic-summary");
+const runtimeDetails = document.querySelector("#runtime-details");
+const runtimeConsole = document.querySelector("#runtime-console");
+const sourceStatus = document.querySelector("#source-status");
+const copySourceButton = document.querySelector("#copy-source");
+const demoMode = document.body.dataset.studioMode === "fixed-demo";
+const demoSampleId = "dino-runner";
+const demoSamplePath = document.body.dataset.sampleSource || "./samples/basic.py";
+const sandboxUrl = document.body.dataset.sandboxUrl || "./sandbox.html";
 const MAX_CODE_BYTES = 100 * 1024;
 const MAX_OUTPUT = 100 * 1024;
+const MAX_DIAGNOSTICS = 24 * 1024;
 let trustedSources;
 let active = null;
 let generation = 0;
@@ -19,6 +35,7 @@ let lastCode = null;
 let releaseNextTab = false;
 
 code.addEventListener("keydown", (event) => {
+  if (demoMode) return;
   if (event.key === "Escape") {
     releaseNextTab = true;
     editorStatus.textContent = "Press Tab or Shift+Tab to move focus out of the editor.";
@@ -69,6 +86,48 @@ function appendOutput(text) {
   if (text.length > room) output.textContent += "\n[Output limit reached.]\n";
   output.scrollTop = output.scrollHeight;
 }
+function appendDiagnostics(text) {
+  if (runtimeConsole.textContent.length >= MAX_DIAGNOSTICS) return;
+  const room = MAX_DIAGNOSTICS - runtimeConsole.textContent.length;
+  runtimeConsole.textContent += text.slice(0, room);
+  if (text.length > room) runtimeConsole.textContent += "\n[Technical details limit reached.]\n";
+  runtimeDetails.hidden = false;
+}
+function clearFeedback() {
+  errorPanel.hidden = true;
+  errorHeading.textContent = "Python error";
+  errorExplanation.textContent = "";
+  errorLocation.textContent = "";
+  errorTraceback.textContent = "";
+  errorCopyStatus.textContent = "";
+  diagnosticSummary.hidden = true;
+  diagnosticSummary.textContent = "";
+  runtimeConsole.textContent = "";
+  runtimeDetails.hidden = true;
+  runtimeDetails.open = false;
+}
+function showPythonError(message) {
+  errorHeading.textContent = message.errorType || "Python error";
+  errorExplanation.textContent = message.explanation || "Python could not finish this program.";
+  errorLocation.textContent = message.lineNumber
+    ? `main.py, line ${message.lineNumber}${message.sourceLine ? `: ${message.sourceLine}` : ""}`
+    : "Source line unavailable.";
+  errorTraceback.textContent = message.traceback || "Python traceback unavailable.";
+  errorPanel.hidden = false;
+  if (message.technical) appendDiagnostics(message.technical);
+  setStatus(demoMode
+    ? "The bundled sample hit a Python error. Restart it to try again."
+    : "Python error. Read the explanation and traceback, then edit and run again.", "error");
+}
+async function copyText(text, report) {
+  try {
+    if (!navigator.clipboard?.writeText) throw new Error("Clipboard unavailable");
+    await navigator.clipboard.writeText(text);
+    report.textContent = "Copied.";
+  } catch {
+    report.textContent = "Could not copy automatically. Select the text and copy it.";
+  }
+}
 async function readText(path) {
   const response = await fetch(path, { cache: "no-cache" });
   if (!response.ok) throw new Error(`${path}: HTTP ${response.status}`);
@@ -107,13 +166,16 @@ async function stop() {
 
 async function run(source) {
   if (!trustedSources) return;
-  if (new TextEncoder().encode(source).length > MAX_CODE_BYTES) {
-    setStatus("The program exceeds the 100 KiB source limit.", "error");
-    return;
-  }
-  if (!source.trim()) {
-    setStatus("Enter a Python program first.", "error");
-    return;
+  const program = demoMode ? null : source;
+  if (!demoMode) {
+    if (new TextEncoder().encode(program).length > MAX_CODE_BYTES) {
+      setStatus("The program exceeds the 100 KiB source limit.", "error");
+      return;
+    }
+    if (!program.trim()) {
+      setStatus("Enter a Python program first.", "error");
+      return;
+    }
   }
   const ownGeneration = ++generation;
   const previous = active;
@@ -121,11 +183,12 @@ async function run(source) {
   stopButton.disabled = true;
   output.textContent = "";
   copyStatus.textContent = "";
+  clearFeedback();
   setStatus("Starting isolated worker…", "starting");
   await dispose(previous);
   if (generation !== ownGeneration) return;
 
-  lastCode = source;
+  lastCode = demoMode ? demoSampleId : program;
   restartButton.disabled = false;
   canvas.getContext("2d").clearRect(0, 0, canvas.width, canvas.height);
   const frame = document.createElement("iframe");
@@ -133,8 +196,8 @@ async function run(source) {
   frame.hidden = true;
   frame.setAttribute("sandbox", "allow-scripts");
   // Give each run a fresh iframe document, including after local code changes.
-  frame.src = `./sandbox.html?run=${Date.now()}-${ownGeneration}`;
-  active = { frame, source, started: performance.now(), firstFrame: false, sent: false };
+  frame.src = demoMode ? sandboxUrl : `${sandboxUrl}?run=${Date.now()}-${ownGeneration}`;
+  active = { frame, source: program, started: performance.now(), firstFrame: false, sent: false };
   stopButton.disabled = false;
   document.body.append(frame);
 }
@@ -145,7 +208,9 @@ addEventListener("message", (event) => {
   const message = event.data;
   if (message.type === "sandbox-ready" && !session.sent) {
     session.sent = true;
-    session.frame.contentWindow.postMessage({ type: "start", code: session.source, ...trustedSources }, "*");
+    session.frame.contentWindow.postMessage(demoMode
+      ? { type: "start-demo", sample: demoSampleId }
+      : { type: "start", code: session.source, ...trustedSources }, "*");
   } else if (message.type === "frame" && Number.isInteger(message.width) && Number.isInteger(message.height) &&
              message.width > 0 && message.height > 0 && message.width <= 1280 && message.height <= 960 &&
              message.pixels instanceof ArrayBuffer && message.pixels.byteLength === message.width * message.height * 4) {
@@ -165,14 +230,27 @@ addEventListener("message", (event) => {
     if (message.text.startsWith("Running program")) appendOutput(`[Runtime ready: ${(message.elapsed / 1000).toFixed(2)}s]\n`);
   } else if (message.type === "output" && typeof message.text === "string") {
     appendOutput(message.text.slice(0, 8192));
+  } else if (message.type === "python-error" && typeof message.errorType === "string" &&
+             typeof message.explanation === "string" && typeof message.traceback === "string") {
+    showPythonError(message);
+    stopButton.disabled = true;
   } else if (message.type === "error" && typeof message.text === "string") {
-    appendOutput(`\n${message.text.slice(0, 8192)}\n`);
-    setStatus("Program or runtime error. See the console.", "error");
+    errorHeading.textContent = "Runtime error";
+    errorExplanation.textContent = message.text.slice(0, 2000);
+    errorLocation.textContent = "";
+    errorTraceback.textContent = "";
+    errorPanel.hidden = false;
+    if (message.technical) appendDiagnostics(message.technical);
+    setStatus("The runtime could not complete this program. See the error details.", "error");
+    stopButton.disabled = true;
   } else if (message.type === "warning" && typeof message.text === "string") {
-    appendOutput(`\n[Warning] ${message.text.slice(0, 1000)}\n`);
+    diagnosticSummary.textContent = message.text.slice(0, 1000);
+    diagnosticSummary.hidden = false;
+    appendDiagnostics(`[Warning] ${message.text.slice(0, 1000)}\n`);
     setStatus(message.text.slice(0, 1000), "warning");
   } else if (message.type === "done") {
     setStatus("Program finished.", "done");
+    stopButton.disabled = true;
   }
 });
 
@@ -197,24 +275,34 @@ for (const type of ["mousemove", "mousedown", "mouseup"]) {
   });
 }
 canvas.addEventListener("contextmenu", (event) => event.preventDefault());
-runButton.addEventListener("click", () => run(code.value));
+runButton.addEventListener("click", () => run(demoMode ? null : code.value));
 stopButton.addEventListener("click", stop);
-restartButton.addEventListener("click", () => { if (lastCode !== null) run(lastCode); });
-copyButton.addEventListener("click", async () => {
-  try {
-    if (!navigator.clipboard?.writeText) throw new Error("Clipboard unavailable");
-    await navigator.clipboard.writeText(output.textContent);
-    copyStatus.textContent = "Console copied.";
-  } catch {
-    copyStatus.textContent = "Could not copy automatically. Select the console text and copy it.";
-  }
+restartButton.addEventListener("click", () => { if (lastCode !== null) run(demoMode ? null : lastCode); });
+copyButton.addEventListener("click", () => copyText(output.textContent, copyStatus));
+if (copySourceButton && sourceStatus) copySourceButton.addEventListener("click", () => copyText(code.value, sourceStatus));
+document.querySelector("#copy-error").addEventListener("click", () => {
+  copyText(`${errorHeading.textContent}\n${errorExplanation.textContent}\n${errorLocation.textContent}\n${errorTraceback.textContent}`, errorCopyStatus);
 });
 runButton.disabled = true;
-Promise.all([readText("./worker.mjs"), readText("./pygame_bridge.py"), readText("./samples/basic.py")])
-  .then(([workerSource, bootstrap, example]) => {
-    trustedSources = { workerSource, bootstrap };
-    code.value = example;
+async function initializeStudio() {
+  try {
+    if (demoMode) {
+      code.value = await readText(demoSamplePath);
+      trustedSources = { fixedSample: demoSampleId };
+      if (sourceStatus) sourceStatus.textContent = "Bundled Dino Runner source loaded. The source is read-only.";
+      setStatus("Ready. Press Run to start the bundled Dino Runner sample.", "ready");
+    } else {
+      const [workerSource, errorFormatter, bootstrap, example] = await Promise.all([
+        readText("./worker.mjs"), readText("./error-format.mjs"), readText("./pygame_bridge.py"), readText("./samples/basic.py"),
+      ]);
+      trustedSources = { workerSource, errorFormatter, bootstrap };
+      code.value = example;
+      setStatus("Ready. Press Run to download the runtime and start the example.", "ready");
+    }
     runButton.disabled = false;
-    setStatus("Ready. Press Run to download the runtime and start the example.", "ready");
-  })
-  .catch((error) => setStatus(`Could not load experiment files: ${error.message}. Serve this directory over HTTP.`, "error"));
+  } catch (error) {
+    if (sourceStatus) sourceStatus.textContent = "The bundled sample could not be loaded.";
+    setStatus(`Could not load Game Studio files: ${error.message}. Serve the site over HTTP.`, "error");
+  }
+}
+initializeStudio();

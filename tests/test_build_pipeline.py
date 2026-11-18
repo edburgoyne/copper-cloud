@@ -28,6 +28,14 @@ class BuildPipelineTests(unittest.TestCase):
         for filename in SITE_FILES:
             shutil.copy2(project_root / filename, self.root / filename)
         shutil.copytree(project_root / "site-assets", self.root / "site-assets")
+        dino_source = project_root / "games" / "site_games" / "dino-runner" / "main.py"
+        fixture_dino = self.root / "games" / "site_games" / "dino-runner" / "main.py"
+        fixture_dino.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(dino_source, fixture_dino)
+        studio_source = self.root / "experiments" / "browser-pygame-studio"
+        studio_source.mkdir(parents=True)
+        for filename in ("studio.js", "sandbox.html", "worker.mjs", "error-format.mjs", "pygame_bridge.py"):
+            shutil.copy2(project_root / "experiments" / "browser-pygame-studio" / filename, studio_source / filename)
         self.games = [self.game("public-game", True), self.game("draft-game", False)]
         self.write_manifest()
 
@@ -147,8 +155,19 @@ class BuildPipelineTests(unittest.TestCase):
         self.assertEqual("./games/live_games/public-game/", registry[0]["url"])
         self.assertNotIn("source", registry[0])
         self.assertTrue((site / "create.html").is_file())
+        self.assertTrue((site / "game-studio.html").is_file())
         self.assertTrue((site / "GAME_CREATION_GUIDE.md").is_file())
         self.assertTrue((site / "site-assets" / "logo.svg").is_file())
+        self.assertTrue((site / "site-assets" / "game-studio-sample.py").is_file())
+        self.assertEqual(
+            (site / "site-assets" / "game-studio-sample.py").read_bytes(),
+            (self.root / "games" / "site_games" / "dino-runner" / "main.py").read_bytes(),
+        )
+        self.assertTrue((site / "site-assets" / "game-studio-runtime" / "studio.js").is_file())
+        built_sandbox = (site / "site-assets" / "game-studio-runtime" / "sandbox.html").read_text(encoding="utf-8")
+        self.assertIn('"dino-runner"', built_sandbox)
+        self.assertIn('message.type === "start" && !PUBLIC_DEMO_BUNDLE', built_sandbox)
+        self.assertFalse((site / "experiments" / "browser-pygame-studio" / "index.html").exists())
         self.assertTrue((site / "games" / "live_games" / "public-game" / "index.html").is_file())
         self.assertFalse((site / "games" / "live_games" / "draft-game").exists())
 

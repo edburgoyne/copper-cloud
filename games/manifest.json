@@ -12,7 +12,7 @@
       ],
       "aspect_ratio": [800, 400],
       "version": "1.0.0",
-      "published": false,
+      "published": true,
       "featured": true,
       "source": "games/site_games/dino-runner/main.py",
       "assets": "games/site_games/dino-runner/assets",
