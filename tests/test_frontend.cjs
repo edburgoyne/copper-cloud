@@ -10,6 +10,8 @@ const source = fs.readFileSync(path.join(__dirname, "../site-assets/site.js"), "
 const studioPage = fs.readFileSync(path.join(__dirname, "../game-studio.html"), "utf8");
 const studioHost = fs.readFileSync(path.join(__dirname, "../experiments/browser-pygame-studio/studio.js"), "utf8");
 const studioSandbox = fs.readFileSync(path.join(__dirname, "../experiments/browser-pygame-studio/sandbox.html"), "utf8");
+const authUi = fs.readFileSync(path.join(__dirname, "../site-assets/auth-ui.js"), "utf8");
+const authApi = fs.readFileSync(path.join(__dirname, "../site-assets/auth.js"), "utf8");
 const games = [
   { id: "dino", title: "Dino Runner", category: "Arcade", description: "Jump over cacti", creator: "Cloud", controls: ["Space: jump"], aspect_ratio: [800, 400], featured: true, thumbnail: "./dino.svg", thumbnail_alt: "A dinosaur", page_url: "./play.html?game=dino", url: "./games/live_games/dino/" },
   { id: "battle", title: "Battle Royale", category: "Action", description: "Survive the storm", creator: "Cloud", controls: ["WASD: move"], aspect_ratio: [900, 600], featured: false, thumbnail: "./battle.svg", thumbnail_alt: "An arena", page_url: "./play.html?game=battle", url: "./games/live_games/battle/" },
@@ -162,6 +164,30 @@ test("Game Studio is discoverable and presents a read-only playable sample", () 
   assert.match(studioPage, /id="restart"/);
   assert.match(studioPage, /data-studio-mode="fixed-demo"/);
   assert.doesNotMatch(studioPage, /contenteditable|<form/i);
+});
+
+test("shared auth navigation is initialized on every site page and uses profiles for usernames", () => {
+  for (const filename of ["index.html", "games.html", "play.html", "create.html", "about.html", "game-studio.html", "auth.html", "account.html", "forgot-password.html", "reset-password.html"]) {
+    const page = fs.readFileSync(path.join(__dirname, `../${filename}`), "utf8");
+    assert.match(page, /id="auth-nav"/);
+    assert.match(page, /site-assets\/auth-ui\.js/);
+    assert.match(page, /cdn\.jsdelivr\.net\/npm\/@supabase\/supabase-js@2/);
+  }
+  assert.match(authUi, /auth\.getSession\(\)/);
+  assert.match(authUi, /auth\.onAuthStateChange\(/);
+  assert.match(authUi, /data-logout/);
+  assert.match(authUi, /auth\.getProfile\(profileId\(session\)\)/);
+  assert.match(authApi, /from\("profiles"\)\.select\("id, username, role, created_at"\)/);
+  assert.match(authUi, /Log In/);
+  assert.match(authUi, /Sign Up/);
+  assert.match(authUi, /Account/);
+  assert.match(authUi, /Log Out/);
+});
+
+test("auth navigation is not connected to Game Studio worker or iframe messaging", () => {
+  assert.doesNotMatch(studioHost, /supabase|access_token|refresh_token/i);
+  assert.doesNotMatch(studioSandbox, /supabase|access_token|refresh_token/i);
+  assert.doesNotMatch(authUi, /postMessage|contentWindow/);
 });
 
 test("public demo requests only the bundled sample ID and sandbox rejects arbitrary code messages", () => {

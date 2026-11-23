@@ -226,3 +226,7 @@ __marimo__/
 .DS_Store
 .idea/
 .vscode/
+
+# Playwright browser test output
+test-results/
+playwright-report/

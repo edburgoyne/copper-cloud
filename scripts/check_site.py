@@ -25,7 +25,8 @@ def check_site(root=ROOT):
             raise ValueError(f"Assembled site file is missing: {filename}")
     for filename in (
         "styles.css", "site.js", "logo.svg", "favicon.svg", "game-placeholder.svg",
-        "game-studio-sample.py", "game-studio-preview.svg",
+        "game-studio-sample.py", "game-studio-preview.svg", "supabase-config.js",
+        "supabase-client.js", "auth.js", "auth-ui.js",
     ):
         if not (site / "site-assets" / filename).is_file():
             raise ValueError(f"Assembled site asset is missing: {filename}")
@@ -70,13 +71,17 @@ def check_site(root=ROOT):
     for marker in ('fetch("./games.json"', 'cache: "no-cache"', "createGameCard", "game.page_url"):
         if marker not in frontend_script:
             raise ValueError(f"Frontend does not appear to load and render games.json ({marker}).")
-    html_pages = ("index.html", "games.html", "play.html", "create.html", "about.html", "game-studio.html")
+    html_pages = ("index.html", "games.html", "play.html", "create.html", "about.html", "game-studio.html", "auth.html", "account.html", "forgot-password.html", "reset-password.html")
     for filename in html_pages:
         page = (site / filename).read_text(encoding="utf-8")
         if "./site-assets/styles.css" not in page or "./site-assets/site.js" not in page:
             raise ValueError(f"Site page {filename!r} is missing shared frontend assets.")
+        if "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" not in page or './site-assets/auth-ui.js' not in page:
+            raise ValueError(f"Site page {filename!r} is missing shared authentication initialization.")
         if 'href="./game-studio.html"' not in page:
             raise ValueError(f"Site page {filename!r} is missing the Game Studio navigation link.")
+        if 'id="auth-nav"' not in page:
+            raise ValueError(f"Site page {filename!r} is missing the shared account navigation mount.")
 
     games_page = (site / "games.html").read_text(encoding="utf-8")
     if games_page.count('href="./game-studio.html"') < 2:
