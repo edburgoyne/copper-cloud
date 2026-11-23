@@ -69,6 +69,25 @@ Pygbag downloads its browser template during a fresh build, and the games load t
 
 The assembler stages a complete site before replacing `build/site/`, checks for required game builds first, and preserves the previous site if assembly fails. The build tests use temporary fixture repositories.
 
+## Local Supabase database tests
+
+These integration tests run against the local Supabase stack only. They create disposable local Auth users and never use the hosted project. Submitted source strings are stored as test data and are never executed. The baseline remains unchanged; reset applies it as-is.
+
+Prerequisites: Docker, Supabase CLI 3.2.0 or compatible, and Python 3.11+.
+
+```sh
+python3 -m venv .venv-db
+source .venv-db/bin/activate
+python -m pip install -r requirements-db.txt
+supabase start --exclude studio,mailpit,storage-api,realtime,edge-runtime,logflare,vector
+supabase db reset --local
+python scripts/test_supabase_db.py
+supabase db reset --local  # discard disposable test accounts and restore the baseline
+supabase stop
+```
+
+The test runner reads the local API URL, anonymous key, and database URL from `supabase status` without printing them. Use `python scripts/test_supabase_db.py` to rerun the tests; reset first when you want a clean database. No service role key is used by the tests.
+
 ## Game Studio preview security
 
 The public preview has no login, saved projects, uploads, or submission API. Its Python runs locally in a disposable worker inside a sandboxed iframe. These browser-side controls are intended for this fixed demonstration; they are not a security boundary against a visitor who changes code in their own browser. See [the experimental runtime guide](docs/GAME_CREATION_GUIDE.md) and [remaining work](experiments/browser-pygame-studio/REMAINING_WORK.md) for tested behavior and limits.
