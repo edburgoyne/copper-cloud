@@ -24,6 +24,7 @@ const copySourceButton = document.querySelector("#copy-source");
 const demoMode = document.body.dataset.studioMode === "fixed-demo";
 const demoSampleId = "dino-runner";
 const demoSamplePath = document.body.dataset.sampleSource || "./samples/basic.py";
+const runtimeBase = document.body.dataset.runtimeBase || "./site-assets/game-studio-runtime/";
 const sandboxUrl = document.body.dataset.sandboxUrl || "./sandbox.html";
 const MAX_CODE_BYTES = 100 * 1024;
 const MAX_OUTPUT = 100 * 1024;
@@ -33,6 +34,8 @@ let active = null;
 let generation = 0;
 let lastCode = null;
 let releaseNextTab = false;
+let runtimeController = null;
+let runtimePromise = null;
 
 code.addEventListener("keydown", (event) => {
   if (demoMode) return;
@@ -128,8 +131,8 @@ async function copyText(text, report) {
     report.textContent = "Could not copy automatically. Select the text and copy it.";
   }
 }
-async function readText(path) {
-  const response = await fetch(path, { cache: "no-cache" });
+async function readText(path, signal) {
+  const response = await fetch(path, { cache: "no-cache", signal });
   if (!response.ok) throw new Error(`${path}: HTTP ${response.status}`);
   return response.text();
 }
@@ -156,6 +159,10 @@ function dispose(session) {
 
 async function stop() {
   const ownGeneration = ++generation;
+  runtimeController?.abort();
+  runtimeController = null;
+  runtimePromise = null;
+  runButton.disabled = false;
   const previous = active;
   active = null;
   stopButton.disabled = true;
@@ -165,7 +172,6 @@ async function stop() {
 }
 
 async function run(source) {
-  if (!trustedSources) return;
   const program = demoMode ? null : source;
   if (!demoMode) {
     if (new TextEncoder().encode(program).length > MAX_CODE_BYTES) {
@@ -180,13 +186,41 @@ async function run(source) {
   const ownGeneration = ++generation;
   const previous = active;
   active = null;
-  stopButton.disabled = true;
+  stopButton.disabled = false;
   output.textContent = "";
   copyStatus.textContent = "";
   clearFeedback();
-  setStatus("Starting isolated worker…", "starting");
+  setStatus("Loading the Python runtime on first Run…", "loading-runtime");
   await dispose(previous);
   if (generation !== ownGeneration) return;
+
+  if (!trustedSources) {
+    runtimeController = new AbortController();
+    const controller = runtimeController;
+    const loading = Promise.all([
+      readText(`${runtimeBase}worker.mjs`, controller.signal),
+      readText(`${runtimeBase}error-format.mjs`, controller.signal),
+      readText(`${runtimeBase}pygame_bridge.py`, controller.signal),
+    ]).then(([workerSource, errorFormatter, bootstrap]) => ({ workerSource, errorFormatter, bootstrap }))
+      .then((runtime) => { trustedSources = runtime; return runtime; });
+    runtimePromise = loading;
+    runButton.disabled = true;
+    try { await loading; }
+    catch (error) {
+      runtimeController = null;
+      if (runtimePromise === loading) runtimePromise = null;
+      runButton.disabled = false;
+      if (generation !== ownGeneration || error.name === "AbortError") return;
+      stopButton.disabled = true;
+      setStatus(`Could not load Python runtime: ${error.message}`, "error");
+      return;
+    }
+    if (runtimePromise === loading) runtimePromise = null;
+    runtimeController = null;
+    runButton.disabled = false;
+    if (generation !== ownGeneration) return;
+  }
+  stopButton.disabled = true;
 
   lastCode = demoMode ? demoSampleId : program;
   restartButton.disabled = false;
@@ -292,17 +326,18 @@ async function initializeStudio() {
       if (sourceStatus) sourceStatus.textContent = "Bundled Dino Runner source loaded. The source is read-only.";
       setStatus("Ready. Press Run to start the bundled Dino Runner sample.", "ready");
     } else {
-      const [workerSource, errorFormatter, bootstrap, example] = await Promise.all([
-        readText("./worker.mjs"), readText("./error-format.mjs"), readText("./pygame_bridge.py"), readText("./samples/basic.py"),
-      ]);
-      trustedSources = { workerSource, errorFormatter, bootstrap };
-      code.value = example;
-      setStatus("Ready. Press Run to download the runtime and start the example.", "ready");
+      code.value = await readText(demoSamplePath);
+      if (sourceStatus) sourceStatus.textContent = "Starter code loaded. Edit it, then press Run or Save game.";
+      setStatus("Ready. Press Run when you want to start the Python runtime.", "ready");
     }
     runButton.disabled = false;
+    document.dispatchEvent(new Event("studio-ready"));
   } catch (error) {
     if (sourceStatus) sourceStatus.textContent = "The bundled sample could not be loaded.";
     setStatus(`Could not load Game Studio files: ${error.message}. Serve the site over HTTP.`, "error");
+    runButton.disabled = true;
+    document.dispatchEvent(new Event("studio-load-error"));
+    return;
   }
 }
 initializeStudio();

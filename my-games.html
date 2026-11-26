@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#17191b">
+  <meta name="description" content="Your saved and submitted Python games.">
+  <title>My Games — Copper Cloud</title>
+  <link rel="icon" type="image/svg+xml" href="./site-assets/favicon.svg">
+  <link rel="stylesheet" href="./site-assets/styles.css">
+  <script src="./site-assets/site.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script type="module" src="./site-assets/auth-ui.js"></script>
+  <script type="module" src="./site-assets/my-games.js"></script>
+</head>
+<body data-page="my-games">
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <div class="shell header-inner">
+      <a class="brand" href="./" aria-label="Copper Cloud home"><img src="./site-assets/logo.svg" alt="" width="42" height="42"><span>COPPER<span class="brand-light"> CLOUD</span><small>THE COMMUNITY ARCADE</small></span></a>
+      <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-nav">Menu <span aria-hidden="true">☰</span></button>
+      <nav class="site-nav" id="site-nav" aria-label="Main navigation"><a href="./games.html">Games</a><a href="./create.html">Create</a><a href="./game-studio.html">Game Studio</a><a href="./my-games.html" aria-current="page">My Games</a><a href="./about.html">About</a></nav>
+      <div class="auth-nav" id="auth-nav"></div>
+    </div>
+  </header>
+  <main id="main" class="shell page-main">
+    <a class="back-link" href="./game-studio.html"><span aria-hidden="true">←</span> Back to Game Studio</a>
+    <div class="page-heading page-heading-wide">
+      <p class="eyebrow"><span class="eyebrow-line"></span> THE WORKSHOP / YOUR PROJECTS</p>
+      <h1>My Games<span class="heading-dot">.</span></h1>
+      <p id="storage-scope">Save your games here and pick up where you left off in Game Studio.</p>
+      <a class="button button-primary" href="./game-studio.html?new=1">Create a new game <span aria-hidden="true">→</span></a>
+    </div>
+    <section class="project-library" aria-labelledby="projects-title">
+      <div class="section-heading"><div><p class="eyebrow">YOUR WORKSHOP</p><h2 id="projects-title">Saved Games<span class="heading-dot">.</span></h2><p id="project-count" class="section-intro" role="status">Loading your games…</p></div></div>
+      <p id="project-message" class="empty-state" role="status" hidden></p>
+      <div id="project-grid" class="project-grid" aria-live="polite"></div>
+      <p class="project-storage-note">Saved games are stored in this browser for now. Export important projects as <code>.py</code> files for a backup.</p>
+    </section>
+    <section class="project-library submitted-library" aria-labelledby="submitted-title">
+      <div class="section-heading"><div><p class="eyebrow">THE ARCADE</p><h2 id="submitted-title">Submitted Games<span class="heading-dot">.</span></h2><p class="section-intro">Games you submit for the Copper Cloud arcade will appear here.</p></div></div>
+      <p class="empty-state" role="status">Submissions are not available yet. Your saved games stay private in My Games.</p>
+    </section>
+  </main>
+  <footer class="site-footer"><div class="shell footer-inner"><div><a class="footer-brand" href="./">✦ &nbsp; COPPER CLOUD</a><p>A little world for playing and making.</p></div><nav aria-label="Footer navigation"><a href="./games.html">Games</a><a href="./create.html">Create</a><a href="./game-studio.html">Game Studio</a><a href="./my-games.html">My Games</a><a href="./about.html">About</a></nav><p class="footer-signoff">MADE FOR CURIOUS MINDS <span>✳</span></p></div></footer>
+</body>
+</html>
