@@ -94,6 +94,9 @@ function renderProject(project) {
     await projectStore.deleteProject(project.id, ownerId);
     await refresh();
   }));
+  actions.append(actionButton("Submit Game", () => {
+    window.dispatchEvent(new CustomEvent("copper-submit-saved-game", { detail: { projectId: project.id } }));
+  }));
 
   body.append(title, modified, actions);
   card.append(art, body);

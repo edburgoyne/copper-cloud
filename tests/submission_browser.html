@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><link rel="icon" href="../site-assets/favicon.svg"><title>Submission flow browser checks</title></head>
+<body>
+  <h1>Submission flow browser checks</h1>
+  <pre id="results">RUNNING</pre>
+  <main>
+    <section id="submission-form-section" hidden>
+      <aside id="submission-auth-notice" hidden><a id="submission-login-link"></a><a id="submission-signup-link"></a></aside>
+      <form id="submission-form">
+        <select id="submission-project"></select><input id="submission-title">
+        <textarea id="submission-description"></textarea><textarea id="submission-controls"></textarea>
+        <button id="submission-send" type="submit">Submit</button><p id="submission-message"></p>
+      </form>
+      <p id="submission-source-note"></p>
+    </section>
+    <button id="open-submit-form" type="button">Open form</button>
+    <p id="submissions-message"></p><div id="submissions-grid"></div>
+  </main>
+  <script>
+    const fake = {
+      session: null,
+      listeners: [],
+      submissions: [],
+      feedback: [{ event_type: "changes_requested", feedback: "Add a clear start button.", created_at: new Date().toISOString() }],
+      nextSubmitError: null,
+      calls: [],
+      auth: {
+        getSession: async () => ({ data: { session: fake.session }, error: null }),
+        onAuthStateChange: (callback) => { fake.listeners.push(callback); return { data: { subscription: { unsubscribe() {} } } }; },
+      },
+      rpc: async (name, args) => {
+        fake.calls.push({ name, args });
+        if (name === "get_submission_feedback") return { data: fake.feedback, error: null };
+        if (fake.nextSubmitError) {
+          const error = fake.nextSubmitError;
+          fake.nextSubmitError = null;
+          return { data: null, error: { message: error } };
+        }
+        const id = "submission-1";
+        fake.submissions = [{ id, user_id: fake.session.user.id, title: args.p_title, description: args.p_description, controls: args.p_controls, status: "submitted", created_at: new Date().toISOString(), updated_at: new Date().toISOString() }];
+        return { data: id, error: null };
+      },
+      from(table) {
+        const query = {
+          select() { return query; },
+          eq(column, value) { fake.lastFilter = [table, column, value]; return query; },
+          order() { return Promise.resolve({ data: fake.submissions, error: null }); },
+        };
+        return query;
+      },
+    };
+    window.__submissionTestClient = fake;
+    window.supabase = { createClient: () => fake };
+    window.addEventListener("error", (event) => { document.querySelector("#results").textContent = `SCRIPT ERROR: ${event.message}`; });
+    window.addEventListener("unhandledrejection", (event) => { document.querySelector("#results").textContent = `UNHANDLED: ${event.reason?.stack || event.reason}`; });
+  </script>
+  <script type="module">
+    const output = document.querySelector("#results");
+    const results = [];
+    const fake = window.__submissionTestClient;
+    function assert(ok, label) { if (!ok) throw new Error(label); results.push(`PASS ${label}`); }
+    async function waitFor(test, label) {
+      const end = Date.now() + 5000;
+      while (Date.now() < end) { if (await test()) return; await new Promise((resolve) => setTimeout(resolve, 20)); }
+      throw new Error(`Timed out: ${label}`);
+    }
+    try {
+      const store = await import("../site-assets/project-store.js");
+      const project = await store.createProject({ title: "Browser Submit Game", source: "print('from saved project')\n", ownerId: "guest" });
+      await import("../site-assets/submission-ui.js");
+      await waitFor(() => document.querySelector("#submission-project").options.length > 1, "saved project choice");
+      const select = document.querySelector("#submission-project");
+      select.value = project.id;
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+      document.querySelector("#submission-description").value = "A game about exploring.";
+      document.querySelector("#submission-controls").value = "Use arrow keys to move.";
+      document.querySelector("#submission-form").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      await waitFor(() => !document.querySelector("#submission-auth-notice").hidden, "guest login notice");
+      assert(fake.calls.length === 0, "guest is asked to log in and no RPC is sent");
+      const savedDraft = JSON.parse(localStorage.getItem("copper-cloud-submission-draft-v1"));
+      assert(savedDraft.source === project.source && savedDraft.projectId === project.id, "guest selection and Python source are preserved for login");
+
+      fake.session = { user: { id: "account-1" } };
+      for (const callback of fake.listeners) callback("SIGNED_IN", fake.session);
+      await waitFor(() => select.value === "__saved_draft__", "guest project draft restored under account");
+      document.querySelector("#submission-form").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      await waitFor(() => document.querySelector("#submission-message").textContent.includes("submitted"), "submission success");
+      const submitCall = fake.calls.find((call) => call.name === "submit_game");
+      assert(submitCall.args.p_title === "Browser Submit Game" && submitCall.args.p_source_code === project.source && submitCall.args.p_controls === "Use arrow keys to move.", "submission sends the selected saved source with the exact RPC parameters");
+      assert(fake.lastFilter[0] === "game_submissions" && fake.lastFilter[1] === "user_id" && fake.lastFilter[2] === "account-1", "submission list is scoped to the signed-in user");
+      const card = document.querySelector(".submission-card");
+      assert(card?.textContent.includes("Waiting for review") && card.textContent.includes("Browser Submit Game"), "submission list renders title and current status");
+      card.querySelector("button").click();
+      await waitFor(() => card.textContent.includes("Add a clear start button."), "review feedback");
+      assert(card.textContent.includes("Reviewer feedback"), "details show feedback from the feedback RPC");
+
+      fake.nextSubmitError = "You already have three open game submissions";
+      document.querySelector("#submission-form").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      await waitFor(() => document.querySelector("#submission-message").textContent.includes("3 games waiting"), "submission limit message");
+      assert(document.querySelector("#submission-message").textContent.includes("3 games waiting"), "submission limit is explained without exposing a database error");
+      await store.deleteProject(project.id, "guest");
+      localStorage.removeItem("copper-cloud-submission-draft-v1");
+      output.textContent = results.join("\n");
+      document.title = "PASS submission flow browser checks";
+    } catch (error) {
+      output.textContent = `${results.join("\n")}\nFAIL ${error.stack || error}`;
+      document.title = "FAIL submission flow browser checks";
+    }
+  </script>
+</body>
+</html>

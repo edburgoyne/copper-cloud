@@ -26,7 +26,7 @@ def check_site(root=ROOT):
     for filename in (
         "styles.css", "site.js", "logo.svg", "favicon.svg", "game-placeholder.svg",
         "game-studio-sample.py", "game-studio-preview.svg", "supabase-config.js",
-        "supabase-client.js", "auth.js", "auth-ui.js", "project-store.js", "my-games.js", "studio-projects.js",
+        "supabase-client.js", "auth.js", "auth-ui.js", "project-store.js", "my-games.js", "studio-projects.js", "submissions.js", "submission-ui.js", "review-submissions.js",
     ):
         if not (site / "site-assets" / filename).is_file():
             raise ValueError(f"Assembled site asset is missing: {filename}")
@@ -71,7 +71,7 @@ def check_site(root=ROOT):
     for marker in ('fetch("./games.json"', 'cache: "no-cache"', "createGameCard", "game.page_url"):
         if marker not in frontend_script:
             raise ValueError(f"Frontend does not appear to load and render games.json ({marker}).")
-    html_pages = ("index.html", "games.html", "play.html", "create.html", "about.html", "game-studio.html", "my-games.html", "auth.html", "account.html", "forgot-password.html", "reset-password.html")
+    html_pages = ("index.html", "games.html", "play.html", "create.html", "about.html", "game-studio.html", "my-games.html", "review-submissions.html", "auth.html", "account.html", "forgot-password.html", "reset-password.html")
     for filename in html_pages:
         page = (site / filename).read_text(encoding="utf-8")
         if "./site-assets/styles.css" not in page or "./site-assets/site.js" not in page:
@@ -93,6 +93,24 @@ def check_site(root=ROOT):
             raise ValueError(f"Game Studio page is missing project editor markup ({marker}).")
     if "readonly" in studio_page.lower() or 'data-studio-mode="editor"' not in studio_page:
         raise ValueError("Game Studio must expose its editable project editor.")
+
+    my_games_page = (site / "my-games.html").read_text(encoding="utf-8")
+    for marker in ('id="submission-form"', 'id="submission-project"', 'id="submission-title"', 'id="submission-description"', 'id="submission-controls"', 'id="submissions-grid"', 'site-assets/submission-ui.js'):
+        if marker not in my_games_page:
+            raise ValueError(f"My Games submission flow is missing required markup ({marker}).")
+    if '.rpc("submit_game"' not in (site / "site-assets" / "submissions.js").read_text(encoding="utf-8"):
+        raise ValueError("My Games submission flow must use the existing submit_game RPC.")
+
+    review_page = (site / "review-submissions.html").read_text(encoding="utf-8")
+    for marker in ('id="review-access-message"', 'id="review-content"', 'id="review-list"', 'site-assets/review-submissions.js'):
+        if marker not in review_page:
+            raise ValueError(f"Submission review page is missing required markup ({marker}).")
+    review_script = (site / "site-assets" / "review-submissions.js").read_text(encoding="utf-8")
+    for marker in ('"review_submission"', '"decide_submission"', '"approve"', 'source_code', 'View Python source (read only)'):
+        if marker not in review_script:
+            raise ValueError(f"Submission review page is missing reviewer behavior ({marker}).")
+    if "published_games" in review_script or "insert(" in review_script:
+        raise ValueError("Submission review must not automatically publish or add games.")
 
     runtime_dir = site / "site-assets" / "game-studio-runtime"
     sandbox = runtime_dir / "sandbox.html"

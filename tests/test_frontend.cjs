@@ -12,6 +12,9 @@ const studioHost = fs.readFileSync(path.join(__dirname, "../experiments/browser-
 const studioSandbox = fs.readFileSync(path.join(__dirname, "../experiments/browser-pygame-studio/sandbox.html"), "utf8");
 const authUi = fs.readFileSync(path.join(__dirname, "../site-assets/auth-ui.js"), "utf8");
 const authApi = fs.readFileSync(path.join(__dirname, "../site-assets/auth.js"), "utf8");
+const submissionPage = fs.readFileSync(path.join(__dirname, "../my-games.html"), "utf8");
+const submissionUi = fs.readFileSync(path.join(__dirname, "../site-assets/submission-ui.js"), "utf8");
+const submissionApi = fs.readFileSync(path.join(__dirname, "../site-assets/submissions.js"), "utf8");
 const games = [
   { id: "dino", title: "Dino Runner", category: "Arcade", description: "Jump over cacti", creator: "Cloud", controls: ["Space: jump"], aspect_ratio: [800, 400], featured: true, thumbnail: "./dino.svg", thumbnail_alt: "A dinosaur", page_url: "./play.html?game=dino", url: "./games/live_games/dino/" },
   { id: "battle", title: "Battle Royale", category: "Action", description: "Survive the storm", creator: "Cloud", controls: ["WASD: move"], aspect_ratio: [900, 600], featured: false, thumbnail: "./battle.svg", thumbnail_alt: "An arena", page_url: "./play.html?game=battle", url: "./games/live_games/battle/" },
@@ -201,4 +204,16 @@ test("editable projects run only through the opaque-origin sandbox protocol", ()
   assert.match(studioSandbox, /message\.type === "start" && !PUBLIC_DEMO_BUNDLE/);
   assert.match(studioPage, /site-assets\/studio-projects\.js/);
   assert.match(studioHost, /runtimePromise/);
+});
+
+test("submission frontend uses the existing authenticated RPCs and preserves the user-scoped list", () => {
+  for (const marker of ['id="submission-project"', 'id="submission-title"', 'id="submission-description"', 'id="submission-controls"', 'id="submissions-grid"']) {
+    assert.ok(submissionPage.includes(marker), `submission page includes ${marker}`);
+  }
+  assert.match(submissionApi, /client\.rpc\("submit_game",\s*\{[\s\S]*p_title:[\s\S]*p_description:[\s\S]*p_controls:[\s\S]*p_source_code:/);
+  assert.match(submissionApi, /\.eq\("user_id", userId\)/);
+  assert.match(submissionApi, /client\.rpc\("get_submission_feedback"/);
+  assert.match(submissionUi, /localStorage\.setItem\(DRAFT_KEY/);
+  assert.match(submissionUi, /auth\.safeReturnUrl|auth\.getSession\(\)/);
+  assert.match(submissionUi, /changes_requested:[\s\S]*approved:[\s\S]*rejected:/);
 });

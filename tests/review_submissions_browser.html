@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Submission review browser checks</title></head>
+<body>
+  <pre id="results">RUNNING</pre>
+  <section id="review-access-message" hidden></section>
+  <section id="review-content" hidden><span id="review-count"></span><p id="review-action-summary" hidden></p><p id="review-message" hidden></p><div id="review-list"></div></section>
+  <script>
+    const fake = {
+      session: { user: { id: "admin-1" } }, roleById: { "admin-1": "admin", "super-1": "super_admin", "student-1": "player" },
+      submissions: [{ id: "submission-1", user_id: "student-1", title: "Read-only test", description: "A small game", controls: "Arrow keys", source_code: "print('safe source')", status: "submitted", created_at: new Date().toISOString(), updated_at: new Date().toISOString() }],
+      events: [{ event_type: "approval_recommended", details: { feedback: "Looks good." }, created_at: new Date().toISOString() }], calls: [], listeners: [],
+      auth: {
+        getSession: async () => ({ data: { session: fake.session }, error: null }),
+        onAuthStateChange: (callback) => { fake.listeners.push(callback); return { data: { subscription: { unsubscribe() {} } } }; },
+      },
+      rpc: async (name, args) => { fake.calls.push({ name, args }); return { data: null, error: null }; },
+      from(table) {
+        const filters = {};
+        const query = {
+          select() { return query; },
+          eq(key, value) { filters[key] = value; return query; },
+          in(key, value) { filters[key] = value; return query; },
+          order() {
+            const source = table === "profiles" ? [{ id: filters.id, role: fake.roleById[filters.id], username: "Test Reviewer" }] : table === "submission_events" ? fake.events : fake.submissions.filter((item) => filters.status.includes(item.status));
+            return Promise.resolve({ data: source, error: null });
+          },
+          maybeSingle() { return Promise.resolve({ data: { id: filters.id, role: fake.roleById[filters.id] }, error: null }); },
+        };
+        return query;
+      },
+    };
+    window.__reviewFake = fake;
+    window.supabase = { createClient: () => fake };
+    window.addEventListener("error", (event) => { document.querySelector("#results").textContent = `SCRIPT ERROR: ${event.message}`; });
+    window.addEventListener("unhandledrejection", (event) => { document.querySelector("#results").textContent = `UNHANDLED: ${event.reason?.stack || event.reason}`; });
+  </script>
+  <script type="module">
+    const output = document.querySelector("#results"), results = [], fake = window.__reviewFake;
+    const assert = (ok, label) => { if (!ok) throw new Error(label); results.push(`PASS ${label}`); };
+    const waitFor = async (test, label) => { const end = Date.now() + 5000; while (Date.now() < end) { if (await test()) return; await new Promise((r) => setTimeout(r, 20)); } throw new Error(`Timed out: ${label}`); };
+    try {
+      await import("../site-assets/review-submissions.js");
+      await waitFor(() => document.querySelector(".review-card"), "admin review card");
+      const card = document.querySelector(".review-card");
+      assert(card.querySelector(".review-code").textContent === "print('safe source')" && !card.querySelector(".review-code").isContentEditable, "submission source is rendered read-only");
+      assert(card.querySelector("button").textContent === "Recommend approval" && ![...card.querySelectorAll("button")].some((b) => b.textContent === "Approve game"), "admin can recommend but cannot make final approval");
+      card.querySelector("textarea").value = "Ready for super-admin approval.";
+      card.querySelector('button[value="approve"]').click();
+      await waitFor(() => fake.calls.some((call) => call.name === "review_submission"), "recommendation RPC");
+      const recommendation = fake.calls.find((call) => call.name === "review_submission");
+      assert(recommendation.args.p_submission_id === "submission-1" && recommendation.args.p_recommendation === "approve" && recommendation.args.p_feedback === "Ready for super-admin approval.", "admin recommendation sends validated feedback and exact RPC arguments");
+
+      fake.session = { user: { id: "super-1" } };
+      for (const callback of fake.listeners) callback("SIGNED_IN", fake.session);
+      await waitFor(() => document.querySelector(".review-history") && document.querySelector(".review-card button")?.textContent === "Approve game", "super-admin final decision controls");
+      const superCard = document.querySelector(".review-card");
+      assert(superCard.textContent.includes("Looks good.") && !superCard.querySelector('button[value="approve"]'), "super-admin can read recommendation history and has no recommendation controls");
+      superCard.querySelector("textarea").value = "Approved for manual repository addition.";
+      const confirmOriginal = window.confirm; window.confirm = () => true;
+      superCard.querySelector("button").click(); window.confirm = confirmOriginal;
+      await waitFor(() => fake.calls.some((call) => call.name === "decide_submission"), "final approval RPC");
+      const decision = fake.calls.find((call) => call.name === "decide_submission");
+      assert(decision.args.p_submission_id === "submission-1" && decision.args.p_decision === "approve" && decision.args.p_feedback === "Approved for manual repository addition.", "super-admin approval sends required feedback and approved decision");
+      assert(!fake.calls.some((call) => call.name.toLowerCase().includes("publish") || call.name.toLowerCase().includes("game_add")), "approval does not publish or add a game");
+
+      fake.session = { user: { id: "student-1" } };
+      for (const callback of fake.listeners) callback("SIGNED_IN", fake.session);
+      await waitFor(() => document.querySelector("#review-access-message").textContent.includes("This page is for admins"), "non-reviewer access denied");
+      assert(document.querySelector("#review-content").hidden, "non-reviewer cannot view the queue");
+      output.textContent = results.join("\n"); document.title = "PASS submission review browser checks";
+    } catch (error) { output.textContent = `${results.join("\n")}\nFAIL ${error.stack || error}`; document.title = "FAIL submission review browser checks"; }
+  </script>
+</body></html>

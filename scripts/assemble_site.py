@@ -11,7 +11,7 @@ from manifest_utils import load_manifest, resolve_manifest_path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SITE_FILES = ("index.html", "games.html", "play.html", "create.html", "about.html", "game-studio.html", "my-games.html", "auth.html", "account.html", "forgot-password.html", "reset-password.html", "GAME_CREATION_GUIDE.md")
+SITE_FILES = ("index.html", "games.html", "play.html", "create.html", "about.html", "game-studio.html", "my-games.html", "review-submissions.html", "auth.html", "account.html", "forgot-password.html", "reset-password.html", "GAME_CREATION_GUIDE.md")
 
 
 def build_game_studio_runtime(root, staged_site):
