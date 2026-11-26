@@ -12,6 +12,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script type="module" src="./site-assets/auth-ui.js"></script>
   <script type="module" src="./site-assets/my-games.js"></script>
+  <script type="module" src="./site-assets/submission-ui.js"></script>
 </head>
 <body data-page="my-games">
   <a class="skip-link" href="#main">Skip to content</a>
@@ -36,10 +37,35 @@
       <p id="project-message" class="empty-state" role="status" hidden></p>
       <div id="project-grid" class="project-grid" aria-live="polite"></div>
       <p class="project-storage-note">Saved games are stored in this browser for now. Export important projects as <code>.py</code> files for a backup.</p>
+      <button id="open-submit-form" class="button button-secondary" type="button">Submit a saved game</button>
+    </section>
+    <section id="submission-form-section" class="project-library" aria-labelledby="submission-form-title" hidden>
+      <div class="section-heading"><div><p class="eyebrow">SEND TO THE ARCADE TEAM</p><h2 id="submission-form-title">Submit a Game<span class="heading-dot">.</span></h2><p class="section-intro">Choose a saved game and tell reviewers how to play it.</p></div></div>
+      <aside id="submission-auth-notice" class="submission-auth-notice" role="status" hidden>
+        <p>You need a Copper Cloud account to submit a game. Your form and code are saved in this browser.</p>
+        <a id="submission-login-link" class="button button-primary button-small" href="./auth.html">Log in</a>
+        <a id="submission-signup-link" class="text-link" href="./auth.html?mode=signup">Create an account</a>
+      </aside>
+      <form id="submission-form" class="submission-form" novalidate>
+        <label for="submission-project">Select a saved game</label>
+        <select id="submission-project" required><option value="">Choose a game…</option></select>
+        <p id="submission-source-note" class="project-storage-note" role="status">Python source is included automatically from the selected game.</p>
+        <label for="submission-title">Title</label>
+        <input id="submission-title" name="title" type="text" minlength="3" maxlength="100" required>
+        <label for="submission-description">Description</label>
+        <textarea id="submission-description" name="description" rows="4" maxlength="2000" required aria-describedby="submission-description-help"></textarea>
+        <p id="submission-description-help" class="field-help">Tell reviewers what your game is about (up to 2,000 characters).</p>
+        <label for="submission-controls">Controls</label>
+        <textarea id="submission-controls" name="controls" rows="3" maxlength="1000" required aria-describedby="submission-controls-help"></textarea>
+        <p id="submission-controls-help" class="field-help">Explain the keys or mouse actions players use (up to 1,000 characters).</p>
+        <button id="submission-send" class="button button-primary" type="submit">Submit for review</button>
+        <p id="submission-message" class="submission-message" role="status" aria-live="polite"></p>
+      </form>
     </section>
     <section class="project-library submitted-library" aria-labelledby="submitted-title">
-      <div class="section-heading"><div><p class="eyebrow">THE ARCADE</p><h2 id="submitted-title">Submitted Games<span class="heading-dot">.</span></h2><p class="section-intro">Games you submit for the Copper Cloud arcade will appear here.</p></div></div>
-      <p class="empty-state" role="status">Submissions are not available yet. Your saved games stay private in My Games.</p>
+      <div class="section-heading"><div><p class="eyebrow">THE ARCADE</p><h2 id="submitted-title">My Submissions<span class="heading-dot">.</span></h2><p class="section-intro">Check the review status and feedback for games you have sent in.</p></div></div>
+      <p id="submissions-message" class="empty-state" role="status">Log in to see your submissions.</p>
+      <div id="submissions-grid" class="project-grid" aria-live="polite"></div>
     </section>
   </main>
   <footer class="site-footer"><div class="shell footer-inner"><div><a class="footer-brand" href="./">✦ &nbsp; COPPER CLOUD</a><p>A little world for playing and making.</p></div><nav aria-label="Footer navigation"><a href="./games.html">Games</a><a href="./create.html">Create</a><a href="./game-studio.html">Game Studio</a><a href="./my-games.html">My Games</a><a href="./about.html">About</a></nav><p class="footer-signoff">MADE FOR CURIOUS MINDS <span>✳</span></p></div></footer>

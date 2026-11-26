@@ -10,7 +10,7 @@ async function initNav() {
   const render = async (session) => {
     const host = $("#auth-nav"); if (!host) return;
     if (!session?.user) { host.innerHTML = '<a href="./auth.html">Log In</a><a class="button button-primary nav-signup" href="./auth.html?mode=signup">Sign Up</a>'; return; }
-    try { const { data, error } = await auth.getProfile(profileId(session)); if (error || !data) throw error; host.innerHTML = `<span>${escapeText(data.username)}</span><a href="./account.html">Account</a><button type="button" data-logout>Log Out</button>`; }
+    try { const { data, error } = await auth.getProfile(profileId(session)); if (error || !data) throw error; const reviewLink = ["admin", "super_admin"].includes(data.role) ? '<a href="./review-submissions.html">Review submissions</a>' : ""; host.innerHTML = `<span>${escapeText(data.username)}</span>${reviewLink}<a href="./account.html">Account</a><button type="button" data-logout>Log Out</button>`; }
     catch { host.innerHTML = '<a href="./auth.html">Log In</a><a href="./auth.html?mode=signup">Sign Up</a>'; }
   };
   try { const { data } = await auth.getSession(); await render(data.session); auth.onAuthStateChange((_event, session) => { void render(session); }); }
@@ -21,6 +21,9 @@ function escapeText(value) { const node = document.createElement("span"); node.t
 function initAuthForm() {
   const form = $("#auth-form"); if (!form) return;
   const mode = new URLSearchParams(location.search).get("mode") === "signup" ? "signup" : "login";
+  if (new URLSearchParams(location.search).has("returnTo")) {
+    void auth.getSession().then(({ data }) => { if (data.session) location.replace(returnTo()); }).catch(() => {});
+  }
   $("#signup-fields").hidden = mode !== "signup"; $("#auth-title").textContent = mode === "signup" ? "Create your account" : "Log in";
   $("#auth-submit").textContent = mode === "signup" ? "Sign Up" : "Log In"; $("#auth-submit").dataset.label = $("#auth-submit").textContent;
   $("#auth-switch").href = `./auth.html?mode=${mode === "signup" ? "login" : "signup"}${new URLSearchParams(location.search).has("returnTo") ? `&returnTo=${encodeURIComponent(returnTo())}` : ""}`;
@@ -29,7 +32,7 @@ function initAuthForm() {
     try {
       const email = $("#email").value.trim(); const password = $("#password").value;
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error("Enter a valid email address.");
-      if (mode === "signup") { const username = $("#username").value.trim(); if (!auth.validateUsername(username)) throw new Error("Use 3–20 letters, numbers, or underscores for your username."); if (password.length < 8) throw new Error("Choose a password with at least 8 characters."); if (password !== $("#confirm-password").value) throw new Error("Passwords do not match."); const { data, error } = await auth.signUp(username, email, password, new URL("./auth.html", location.href).href); if (error) throw error; if (data.session) location.href = returnTo(); else show(status, "Check your email for a confirmation link. You can log in after confirming."); }
+      if (mode === "signup") { const username = $("#username").value.trim(); if (!auth.validateUsername(username)) throw new Error("Use 3–20 letters, numbers, or underscores for your username."); if (password.length < 8) throw new Error("Choose a password with at least 8 characters."); if (password !== $("#confirm-password").value) throw new Error("Passwords do not match."); const redirectTo = new URL("./auth.html", location.href); if (new URLSearchParams(location.search).has("returnTo")) redirectTo.searchParams.set("returnTo", returnTo()); const { data, error } = await auth.signUp(username, email, password, redirectTo.href); if (error) throw error; if (data.session) location.href = returnTo(); else show(status, "Check your email for a confirmation link. You can log in after confirming."); }
       else { const { data, error } = await auth.signIn(email, password); if (error) throw error; if (!data.session) throw new Error("Sign-in did not create a session. Please try again."); location.href = returnTo(); }
     } catch (error) { show(status, error.message && (error.message.startsWith("Use ") || error.message.startsWith("Choose ") || error.message === "Passwords do not match." || error.message === "Enter a valid email address.") ? error.message : auth.authError(error), true); }
     finally { busy(form, false); }
