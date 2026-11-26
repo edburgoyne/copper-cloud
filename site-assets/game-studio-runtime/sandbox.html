@@ -140,7 +140,7 @@ addEventListener("message", (event) => {
              typeof message.workerSource === "string" && message.workerSource.length < 100000 &&
              typeof message.errorFormatter === "string" && message.errorFormatter.length < 100000 &&
              typeof message.bootstrap === "string" && message.bootstrap.length < 100000 &&
-             typeof message.code === "string" && message.code.length <= 102400) {
+             typeof message.code === "string" && new TextEncoder().encode(message.code).byteLength <= 5242880) {
     launchWorker(message, message.code);
   }
 });

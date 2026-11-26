@@ -1,8 +1,9 @@
 const DATABASE_NAME = "copper-cloud-projects";
-const DATABASE_VERSION = 1;
+const DATABASE_VERSION = 2;
 const PROJECTS_STORE = "projects";
+const DRAFTS_STORE = "drafts";
 const RECOVERY_KEY = "copper-cloud-studio-recovery-v1";
-const MAX_SOURCE_BYTES = 100 * 1024;
+const MAX_SOURCE_BYTES = 5 * 1024 * 1024;
 
 function openDatabase() {
   if (!globalThis.indexedDB) {
@@ -22,6 +23,7 @@ function openDatabase() {
         const store = database.createObjectStore(PROJECTS_STORE, { keyPath: "id" });
         store.createIndex("updatedAt", "updatedAt", { unique: false });
       }
+      if (!database.objectStoreNames.contains(DRAFTS_STORE)) database.createObjectStore(DRAFTS_STORE, { keyPath: "key" });
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(storageError(request.error));
@@ -39,7 +41,7 @@ function storageError(error) {
   return new Error(error?.message || "Local project storage is unavailable in this browser.");
 }
 
-async function transact(mode, action) {
+async function transact(mode, action, storeName = PROJECTS_STORE) {
   const database = await openDatabase();
   return new Promise((resolve, reject) => {
     let transaction;
@@ -47,8 +49,8 @@ async function transact(mode, action) {
     let hasValue = false;
     let actionError = null;
     try {
-      transaction = database.transaction(PROJECTS_STORE, mode);
-      const store = transaction.objectStore(PROJECTS_STORE);
+      transaction = database.transaction(storeName, mode);
+      const store = transaction.objectStore(storeName);
       action(store, (result) => { value = result; hasValue = true; }, (error) => { actionError = error; });
     } catch (error) {
       database.close();
@@ -81,7 +83,7 @@ function validateTitle(title) {
 function validateSource(source) {
   if (typeof source !== "string") throw new Error("Game source must be text.");
   if (new TextEncoder().encode(source).byteLength > MAX_SOURCE_BYTES) {
-    throw new Error("This game is larger than the 100 KiB source limit.");
+    throw new Error("This game is larger than the 5 MiB source limit.");
   }
   return source;
 }
@@ -195,31 +197,61 @@ export async function deleteProject(id, ownerId = "guest") {
 
 function recoveryKey(ownerId) { return `${RECOVERY_KEY}:${ownerId || "guest"}`; }
 
-export function readRecovery(ownerId = "guest") {
+export async function readRecovery(ownerId = "guest") {
   try {
     const value = localStorage.getItem(recoveryKey(ownerId));
-    if (!value) return null;
-    const draft = JSON.parse(value);
-    if (typeof draft.source !== "string" || !draft.source || !Number.isFinite(draft.updatedAt)) return null;
-    validateSource(draft.source);
-    return draft;
-  } catch {
-    return null;
-  }
+    if (value) {
+      const legacy = JSON.parse(value);
+      if (typeof legacy.source === "string" && legacy.source && Number.isFinite(legacy.updatedAt)) {
+        validateSource(legacy.source);
+        if (await writeRecovery(legacy.source, ownerId)) localStorage.removeItem(recoveryKey(ownerId));
+      } else localStorage.removeItem(recoveryKey(ownerId));
+    }
+  } catch { /* Continue with the IndexedDB copy. */ }
+  try {
+    return await transact("readonly", (store, setValue) => {
+      const request = store.get(`studio:${ownerId || "guest"}`);
+      request.onsuccess = () => setValue(request.result || null);
+    }, DRAFTS_STORE);
+  } catch { return null; }
 }
 
-export function writeRecovery(source, ownerId = "guest") {
+export async function writeRecovery(source, ownerId = "guest") {
   try {
     validateSource(source);
-    localStorage.setItem(recoveryKey(ownerId), JSON.stringify({ source, updatedAt: Date.now() }));
+    await transact("readwrite", (store) => store.put({ key: `studio:${ownerId || "guest"}`, source, updatedAt: Date.now() }), DRAFTS_STORE);
     return true;
   } catch {
     return false;
   }
 }
 
-export function clearRecovery(ownerId = "guest") {
-  try { localStorage.removeItem(recoveryKey(ownerId)); } catch { /* Recovery is best-effort. */ }
+export async function clearRecovery(ownerId = "guest") {
+  try { await transact("readwrite", (store) => store.delete(`studio:${ownerId || "guest"}`), DRAFTS_STORE); } catch { /* Recovery is best-effort. */ }
+}
+
+export async function readSubmissionDraft(submissionId) {
+  if (!submissionId) return null;
+  try {
+    return await transact("readonly", (store, setValue) => {
+      const request = store.get(`submission:${submissionId}`);
+      request.onsuccess = () => setValue(request.result?.draft || null);
+    }, DRAFTS_STORE);
+  } catch { return null; }
+}
+
+export async function writeSubmissionDraft(submissionId, draft) {
+  if (!submissionId || !draft || typeof draft.source !== "string") return false;
+  try {
+    validateSource(draft.source);
+    await transact("readwrite", (store) => store.put({ key: `submission:${submissionId}`, draft: { ...draft, updatedAt: Date.now() } }), DRAFTS_STORE);
+    return true;
+  } catch { return false; }
+}
+
+export async function clearSubmissionDraft(submissionId) {
+  if (!submissionId) return;
+  try { await transact("readwrite", (store) => store.delete(`submission:${submissionId}`), DRAFTS_STORE); } catch { /* Best-effort cleanup. */ }
 }
 
 export function projectExportName(title) {

@@ -138,8 +138,10 @@ function bindReviewerActions(form, submission, buttons, status) {
         p_feedback: feedback,
       });
       if (error) throw error;
-      actionStatus(status, "Recommendation saved. The student can see your note in My Submissions.");
+      actionSummary.textContent = `Recommendation saved for “${submission.title}”. The student can see your note in My Submissions.`;
+      actionSummary.hidden = false;
       buttons.forEach((button) => { button.disabled = true; });
+      await refreshQueue();
     } catch (error) {
       actionStatus(status, explainError(error), true);
       buttons.forEach((button) => { button.disabled = false; });
@@ -149,35 +151,51 @@ function bindReviewerActions(form, submission, buttons, status) {
 
 const RECOMMENDATIONS_BY_VALUE = new Set(["approve", "reject", "request_changes"]);
 
-function bindApproval(form, submission, button, status) {
+function bindApproval(form, submission, buttons, status) {
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
-    if (event.submitter !== button) return;
+    const decision = event.submitter?.value;
+    if (!new Set(["approve", "reject"]).has(decision)) return;
     const feedback = form.querySelector("textarea").value.trim();
     if (!feedback || feedback.length > 2000) {
       actionStatus(status, "Add a final note of 1–2,000 characters for the student.", true);
       form.querySelector("textarea").focus();
       return;
     }
-    if (!window.confirm(`Approve “${submission.title}”? This records approval but does not publish the game.`)) return;
-    button.disabled = true;
+    const prompt = decision === "approve"
+      ? `Approve “${submission.title}”? This records approval but does not publish the game.`
+      : `Reject “${submission.title}”? The student will see your final decision and note.`;
+    if (!window.confirm(prompt)) return;
+    buttons.forEach((button) => { button.disabled = true; });
     actionStatus(status, "Saving the final decision…");
     try {
       const { error } = await supabase.rpc("decide_submission", {
         p_submission_id: submission.id,
-        p_decision: "approve",
+        p_decision: decision,
         p_feedback: feedback,
       });
       if (error) throw error;
-      actionStatus(status, "Approved. The student can see the decision and note in My Submissions. The game has not been published.");
-      actionSummary.textContent = `Approved “${submission.title}”. The student can see your decision and note in My Submissions. The game has not been published.`;
+      const decisionLabel = decision === "approve" ? "Approved" : "Rejected";
+      actionStatus(status, `${decisionLabel}. The student can see the decision and note in My Submissions.${decision === "approve" ? " The game has not been published." : ""}`);
+      actionSummary.textContent = `${decisionLabel} “${submission.title}”. The student can see your decision and note in My Submissions.${decision === "approve" ? " The game has not been published." : ""}`;
       actionSummary.hidden = false;
       await refreshQueue();
     } catch (error) {
-      button.disabled = false;
+      buttons.forEach((button) => { button.disabled = false; });
       actionStatus(status, explainError(error), true);
     }
   });
+}
+
+async function loadCover(submission, host) {
+  if (!submission.cover_image_path || !supabase?.storage) return;
+  const { data, error } = await supabase.storage.from("submission-covers").createSignedUrl(submission.cover_image_path, 60);
+  if (error) throw error;
+  const image = document.createElement("img");
+  image.className = "review-cover";
+  image.src = data.signedUrl;
+  image.alt = `Cover image submitted for ${submission.title}`;
+  host.prepend(image);
 }
 
 function renderSubmission(submission) {
@@ -200,6 +218,16 @@ function renderSubmission(submission) {
   body.className = "review-card-body";
   addDetail(body, "Description", submission.description);
   addDetail(body, "Controls", submission.controls);
+  if (submission.cover_image_path) {
+    const coverStatus = document.createElement("p");
+    coverStatus.className = "review-cover-status";
+    coverStatus.textContent = "Loading private cover image…";
+    body.prepend(coverStatus);
+    void loadCover(submission, body).then(() => coverStatus.remove()).catch(() => {
+      coverStatus.textContent = "The private cover image could not be loaded.";
+      coverStatus.classList.add("is-error");
+    });
+  }
   const source = document.createElement("details");
   source.className = "review-source";
   const sourceSummary = document.createElement("summary");
@@ -213,7 +241,7 @@ function renderSubmission(submission) {
   const actions = document.createElement("div");
   actions.className = "review-action-panel";
   const feedbackField = makeField(
-    activeRole === "super_admin" ? "Final note to the student" : "Note to the student",
+    "Recommendation feedback to the student",
     `review-feedback-${submission.id}`,
     "textarea",
     2000,
@@ -223,9 +251,9 @@ function renderSubmission(submission) {
   actionStatusNode.className = "review-action-status";
   actionStatusNode.setAttribute("role", "status");
 
-  if (activeRole === "admin") {
+  {
     const form = document.createElement("form");
-    form.className = "review-action-form";
+    form.className = "review-action-form review-recommendation-form";
     form.append(feedbackField.wrapper);
     const buttons = [];
     for (const [value, label, className] of [
@@ -245,22 +273,34 @@ function renderSubmission(submission) {
     form.append(actionStatusNode);
     bindReviewerActions(form, submission, buttons, actionStatusNode);
     actions.append(form);
-  } else {
+  }
+  if (activeRole === "super_admin") {
     const history = document.createElement("section");
     history.className = "review-recommendations";
     const heading = document.createElement("h4");
     heading.textContent = "Admin recommendations";
     const historyContent = document.createElement("div");
     history.append(heading, historyContent);
-    const form = document.createElement("form");
-    form.className = "review-action-form";
+    const finalForm = document.createElement("form");
+    finalForm.className = "review-action-form review-final-form";
+    const finalField = makeField("Final decision note to the student", `final-feedback-${submission.id}`, "textarea", 2000, "Required for either final decision (1–2,000 characters).");
+    const decisionStatus = document.createElement("p");
+    decisionStatus.className = "review-action-status";
+    decisionStatus.setAttribute("role", "status");
+    finalForm.append(finalField.wrapper);
     const approve = document.createElement("button");
     approve.type = "submit";
+    approve.value = "approve";
     approve.className = "button button-primary button-small";
     approve.textContent = "Approve game";
-    form.append(feedbackField.wrapper, approve, actionStatusNode);
-    bindApproval(form, submission, approve, actionStatusNode);
-    actions.append(history, form);
+    const reject = document.createElement("button");
+    reject.type = "submit";
+    reject.value = "reject";
+    reject.className = "button button-secondary button-small";
+    reject.textContent = "Reject game";
+    finalForm.append(approve, reject, decisionStatus);
+    bindApproval(finalForm, submission, [...finalForm.querySelectorAll("button")], decisionStatus);
+    actions.append(history, finalForm);
     void loadRecommendationHistory(submission, historyContent).catch((error) => {
       const problem = document.createElement("p");
       problem.className = "is-error";
@@ -280,7 +320,7 @@ async function refreshQueue() {
   message.textContent = "Loading open submissions…";
   try {
     const { data, error } = await supabase.from("game_submissions")
-      .select("id,user_id,title,description,controls,source_code,status,created_at,updated_at")
+      .select("id,user_id,title,description,controls,source_code,status,created_at,updated_at,cover_image_path")
       .in("status", OPEN_STATUSES)
       .order("created_at", { ascending: true });
     if (error) throw error;

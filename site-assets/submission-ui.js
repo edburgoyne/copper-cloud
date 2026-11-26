@@ -1,15 +1,17 @@
 import * as auth from "./auth.js";
 import { supabase } from "./supabase-client.js";
-import { createSubmission, friendlySubmissionError, getSubmissionFeedback, listUserSubmissions, validateSubmission } from "./submissions.js";
+import { createSubmission, friendlySubmissionError, getSubmissionFeedback, listUserSubmissions, signedCoverUrl, validateSubmission, MAX_COVER_BYTES, MAX_SOURCE_BYTES } from "./submissions.js";
 
-const DRAFT_KEY = "copper-cloud-submission-draft-v1";
-const MAX_SOURCE_BYTES = 100 * 1024;
+const DRAFT_ID = "form";
 const formSection = document.querySelector("#submission-form-section");
 const form = document.querySelector("#submission-form");
 const projectSelect = document.querySelector("#submission-project");
 const titleInput = document.querySelector("#submission-title");
 const descriptionInput = document.querySelector("#submission-description");
 const controlsInput = document.querySelector("#submission-controls");
+const coverInput = document.querySelector("#submission-cover");
+const coverPreview = document.querySelector("#submission-cover-preview");
+const coverRemoveButton = document.querySelector("#submission-cover-remove");
 const sendButton = document.querySelector("#submission-send");
 const message = document.querySelector("#submission-message");
 const authNotice = document.querySelector("#submission-auth-notice");
@@ -27,7 +29,7 @@ const statusLabels = {
 };
 const eventLabels = {
   approval_recommended: "A reviewer recommended approval",
-  rejection_recommended: "A reviewer recommended that changes are needed",
+  rejection_recommended: "A reviewer recommended not approving this game",
   changes_requested: "A reviewer requested changes",
   approved: "Your game was approved",
   rejected: "Your game was not approved",
@@ -41,6 +43,10 @@ let selectedSource = "";
 let selectedProjectId = "";
 let restoredDraft = null;
 let pending = false;
+let selectedCover = null;
+let coverPreviewUrl = null;
+let draftTimer = null;
+let draftWrite = Promise.resolve(true);
 const loadedFeedback = new Set();
 
 function setMessage(text, error = false) {
@@ -48,29 +54,52 @@ function setMessage(text, error = false) {
   message.classList.toggle("is-error", error);
 }
 
-function readDraft() {
+async function readDraft() {
+  const draft = await projectStore.readSubmissionDraft(DRAFT_ID);
+  if (draft && typeof draft.source === "string" && new TextEncoder().encode(draft.source).byteLength <= MAX_SOURCE_BYTES) return draft;
   try {
-    const draft = JSON.parse(localStorage.getItem(DRAFT_KEY) || "null");
-    if (!draft || typeof draft !== "object") return null;
-    if (typeof draft.source !== "string" || new TextEncoder().encode(draft.source).byteLength > MAX_SOURCE_BYTES) return null;
-    return draft;
+    const legacy = JSON.parse(localStorage.getItem("copper-cloud-submission-draft-v1") || "null");
+    if (!legacy || typeof legacy.source !== "string" || new TextEncoder().encode(legacy.source).byteLength > MAX_SOURCE_BYTES) return null;
+    if (await projectStore.writeSubmissionDraft(DRAFT_ID, legacy)) localStorage.removeItem("copper-cloud-submission-draft-v1");
+    return legacy;
   } catch { return null; }
 }
 
 function saveDraft() {
-  try {
-    localStorage.setItem(DRAFT_KEY, JSON.stringify({
-      projectId: selectedProjectId,
-      projectTitle: projectSelect.selectedOptions[0]?.textContent || "",
-      source: selectedSource,
-      title: titleInput.value,
-      description: descriptionInput.value,
-      controls: controlsInput.value,
-      updatedAt: Date.now(),
-    }));
-  } catch {
-    sourceNote.textContent = "This browser could not save your form draft. Keep this page open until you log in.";
+  clearTimeout(draftTimer);
+  draftTimer = setTimeout(() => { void flushDraft(); }, 250);
+}
+
+async function flushDraft() {
+  clearTimeout(draftTimer);
+  const draft = {
+    projectId: selectedProjectId,
+    projectTitle: projectSelect.selectedOptions[0]?.textContent || "",
+    source: selectedSource,
+    title: titleInput.value,
+    description: descriptionInput.value,
+    controls: controlsInput.value,
+    cover: selectedCover,
+    coverName: selectedCover?.name || "",
+  };
+  draftWrite = draftWrite.then(() => projectStore.writeSubmissionDraft(DRAFT_ID, draft));
+  if (!await draftWrite) sourceNote.textContent = "This browser could not save your form draft. Keep this page open until you submit.";
+}
+
+function showCoverPreview(file, name = file?.name || "Selected cover image") {
+  if (coverPreviewUrl) URL.revokeObjectURL(coverPreviewUrl);
+  if (!file) {
+    coverPreviewUrl = null;
+    coverPreview.hidden = true;
+    coverPreview.removeAttribute("src");
+    coverRemoveButton.hidden = true;
+    return;
   }
+  coverPreviewUrl = URL.createObjectURL(file);
+  coverPreview.src = coverPreviewUrl;
+  coverPreview.alt = `Preview of ${name}`;
+  coverPreview.hidden = false;
+  coverRemoveButton.hidden = false;
 }
 
 function loginUrl() {
@@ -120,6 +149,8 @@ async function loadProjects(draft = restoredDraft) {
     titleInput.value = draft.title || draft.projectTitle || titleInput.value;
     descriptionInput.value = draft.description || "";
     controlsInput.value = draft.controls || "";
+    selectedCover = draft.cover instanceof Blob ? draft.cover : null;
+    if (selectedCover) showCoverPreview(selectedCover, draft.coverName);
   }
   updateSourceNote();
   if (missingProjectNotice) sourceNote.textContent = missingProjectNotice;
@@ -233,6 +264,21 @@ function renderSubmission(submission) {
     detailLine("Controls", submission.controls),
     detailLine("Last updated", readableDate(submission.updated_at)),
   );
+  if (submission.cover_image_path) {
+    const cover = document.createElement("img");
+    cover.className = "submission-cover";
+    cover.alt = `Cover image for ${submission.title}`;
+    cover.loading = "lazy";
+    content.prepend(cover);
+    void signedCoverUrl(supabase, submission.cover_image_path).then((url) => { if (url) cover.src = url; else cover.remove(); }).catch(() => cover.remove());
+  }
+  if (["submitted", "under_review", "changes_requested"].includes(submission.status)) {
+    const edit = document.createElement("a");
+    edit.className = "button button-secondary button-small submission-edit-link";
+    edit.href = `./game-studio.html?editSubmission=${encodeURIComponent(submission.id)}`;
+    edit.textContent = "Edit Submission";
+    content.append(edit);
+  }
   const feedbackHeading = document.createElement("h4");
   feedbackHeading.textContent = "Reviewer feedback";
   const feedbackHost = document.createElement("div");
@@ -278,7 +324,7 @@ async function handleSubmit(event) {
     if (!selectedSource) throw new Error("Choose a saved game first.");
     const fields = { title: titleInput.value, description: descriptionInput.value, controls: controlsInput.value };
     validateSubmission(fields, selectedSource);
-    saveDraft();
+    await flushDraft();
     let currentSession = session;
     try {
       const result = await auth.getSession();
@@ -310,10 +356,12 @@ async function handleSubmit(event) {
       title: titleInput.value,
       description: descriptionInput.value,
       controls: controlsInput.value,
-    }, selectedSource);
+    }, selectedSource, selectedCover);
     if (!id) throw new Error("Submission was not confirmed by the server.");
-    localStorage.removeItem(DRAFT_KEY);
+    await projectStore.clearSubmissionDraft(DRAFT_ID);
     restoredDraft = null;
+    selectedCover = null;
+    showCoverPreview(null);
     setMessage("Your game was submitted! You can follow its status below.");
     authNotice.hidden = true;
     await refreshSubmissions();
@@ -329,7 +377,7 @@ async function handleSubmit(event) {
 
 async function initialize() {
   projectStore = await import("./project-store.js");
-  restoredDraft = readDraft();
+  restoredDraft = await readDraft();
   try {
     const { data, error } = await auth.getSession();
     if (error) throw error;
@@ -356,15 +404,35 @@ async function initialize() {
     updateSourceNote();
     saveDraft();
   });
+  coverInput.addEventListener("change", () => {
+    const file = coverInput.files?.[0] || null;
+    if (!file) return;
+    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type) || file.size < 1 || file.size > MAX_COVER_BYTES) {
+      setMessage("Choose a PNG, JPEG, or WebP cover image no larger than 3 MiB.", true);
+      coverInput.value = "";
+      return;
+    }
+    setMessage("");
+    selectedCover = file;
+    showCoverPreview(file);
+    saveDraft();
+  });
+  coverRemoveButton.addEventListener("click", () => {
+    selectedCover = null;
+    coverInput.value = "";
+    showCoverPreview(null);
+    saveDraft();
+  });
   form.addEventListener("input", saveDraft);
   form.addEventListener("submit", handleSubmit);
+  addEventListener("pagehide", () => { void flushDraft(); });
   try {
     auth.onAuthStateChange(async (_event, nextSession) => {
       const previousOwner = ownerId;
       session = nextSession;
       ownerId = session?.user?.id || "guest";
       if (previousOwner !== ownerId) {
-        restoredDraft = readDraft();
+        restoredDraft = await readDraft();
         await loadProjects(restoredDraft);
         if (restoredDraft) formSection.hidden = false;
       }

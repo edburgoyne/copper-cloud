@@ -7,11 +7,22 @@ const busy = (form, value) => { const button = form.querySelector('[type="submit
 function profileId(session) { return session?.user?.id; }
 async function initNav() {
   document.querySelectorAll(".header-space").forEach((host) => { host.className = "auth-nav"; host.id = "auth-nav"; });
+  let renderVersion = 0;
   const render = async (session) => {
     const host = $("#auth-nav"); if (!host) return;
+    const version = ++renderVersion;
     if (!session?.user) { host.innerHTML = '<a href="./auth.html">Log In</a><a class="button button-primary nav-signup" href="./auth.html?mode=signup">Sign Up</a>'; return; }
-    try { const { data, error } = await auth.getProfile(profileId(session)); if (error || !data) throw error; const reviewLink = ["admin", "super_admin"].includes(data.role) ? '<a href="./review-submissions.html">Review submissions</a>' : ""; host.innerHTML = `<span>${escapeText(data.username)}</span>${reviewLink}<a href="./account.html">Account</a><button type="button" data-logout>Log Out</button>`; }
-    catch { host.innerHTML = '<a href="./auth.html">Log In</a><a href="./auth.html?mode=signup">Sign Up</a>'; }
+    host.innerHTML = `<span>${escapeText(session.user.email || "Account")}</span><span class="auth-nav-loading">Loading account…</span>`;
+    try {
+      const { data, error } = await auth.getProfile(profileId(session));
+      if (version !== renderVersion) return;
+      if (error || !data) throw error || new Error("Account profile is unavailable.");
+      const reviewLink = ["admin", "super_admin"].includes(data.role) ? '<a href="./review-submissions.html">Review submissions</a>' : "";
+      host.innerHTML = `<span>${escapeText(data.username)}</span>${reviewLink}<a href="./account.html">Account</a><button type="button" data-logout>Log Out</button>`;
+    } catch {
+      if (version !== renderVersion) return;
+      host.innerHTML = '<a href="./account.html">Account</a><button type="button" data-logout>Log Out</button>';
+    }
   };
   try { const { data } = await auth.getSession(); await render(data.session); auth.onAuthStateChange((_event, session) => { void render(session); }); }
   catch { await render(null); }

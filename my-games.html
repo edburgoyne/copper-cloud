@@ -58,6 +58,10 @@
         <label for="submission-controls">Controls</label>
         <textarea id="submission-controls" name="controls" rows="3" maxlength="1000" required aria-describedby="submission-controls-help"></textarea>
         <p id="submission-controls-help" class="field-help">Explain the keys or mouse actions players use (up to 1,000 characters).</p>
+        <label for="submission-cover">Cover image <span class="field-help">Optional · PNG, JPEG, or WebP, up to 3 MiB</span></label>
+        <input id="submission-cover" name="cover" type="file" accept="image/png,image/jpeg,image/webp">
+        <img id="submission-cover-preview" class="submission-cover-preview" alt="Selected cover image preview" hidden>
+        <button id="submission-cover-remove" class="button button-secondary button-small" type="button" hidden>Remove cover image</button>
         <button id="submission-send" class="button button-primary" type="submit">Submit for review</button>
         <p id="submission-message" class="submission-message" role="status" aria-live="polite"></p>
       </form>
