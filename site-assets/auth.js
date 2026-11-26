@@ -7,7 +7,7 @@ export function safeReturnUrl(value) {
   if (!value) return fallback.href;
   try {
     const target = new URL(value, location.href);
-    if (target.origin !== location.origin || !/^\/(?:copper-cloud\/)?(?:index\.html|games\.html|play\.html|create\.html|about\.html|game-studio\.html|account\.html)?$/.test(target.pathname)) return fallback.href;
+    if (target.origin !== location.origin || !/^\/(?:copper-cloud\/)?(?:index\.html|games\.html|play\.html|create\.html|about\.html|game-studio\.html|my-games\.html|account\.html)?$/.test(target.pathname)) return fallback.href;
     return target.href;
   } catch { return fallback.href; }
 }

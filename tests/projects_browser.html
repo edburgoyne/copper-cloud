@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><link rel="icon" href="data:,"><title>Game Studio browser tests</title></head>
+<body>
+  <h1>Game Studio browser tests</h1>
+  <pre id="results">RUNNING</pre>
+  <iframe id="app" title="test app" hidden></iframe>
+  <script type="module">
+    const results = [];
+    const output = document.querySelector("#results");
+    window.addEventListener("error", (event) => { output.textContent = `SCRIPT ERROR: ${event.message}`; });
+    window.addEventListener("unhandledrejection", (event) => { output.textContent = `UNHANDLED: ${event.reason?.stack || event.reason}`; });
+    output.textContent = "SCRIPT STARTED";
+    const frame = document.querySelector("#app");
+    const siteRoot = new URLSearchParams(location.search).get("site") || "../build/site/";
+    const root = new URL(siteRoot, location.href);
+    let store;
+    try { store = await import(new URL("site-assets/project-store.js", root)); }
+    catch (error) { output.textContent = `IMPORT ERROR: ${error.stack || error}`; throw error; }
+
+    function assert(condition, message) {
+      if (!condition) throw new Error(message);
+      results.push(`PASS ${message}`);
+    }
+
+    async function waitFor(check, description, timeout = 10000) {
+      const until = Date.now() + timeout;
+      while (Date.now() < until) {
+        if (await check()) return;
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
+      throw new Error(`Timed out waiting for ${description}`);
+    }
+
+    async function navigate(path) {
+      await new Promise((resolve) => {
+        frame.addEventListener("load", resolve, { once: true });
+        frame.src = new URL(path, root).href;
+      });
+      await waitFor(() => frame.contentDocument?.readyState === "complete", `${path} page load`);
+    }
+
+    function editor() { return frame.contentDocument.querySelector("#code"); }
+    function changeCode(source) {
+      const win = frame.contentWindow;
+      const node = editor();
+      node.value = source;
+      node.dispatchEvent(new win.Event("input", { bubbles: true }));
+    }
+
+    async function saveAs(title, source) {
+      const win = frame.contentWindow;
+      await waitFor(() => !frame.contentDocument.querySelector("#save-project")?.disabled, "Save control ready");
+      win.prompt = () => title;
+      changeCode(source);
+      frame.contentDocument.querySelector("#save-project").click();
+      await waitFor(() => frame.contentDocument.querySelector("#save-state")?.textContent === "Saved", `save ${title}`);
+      return new URLSearchParams(win.location.search).get("project");
+    }
+
+    try {
+      await navigate("game-studio.html");
+      await waitFor(() => frame.contentDocument.querySelector("#status")?.dataset.phase === "ready", "editable starter");
+      assert(!editor().readOnly && editor().value.includes("pygame"), "direct Game Studio opens an editable starter");
+      const existingProjects = await store.listProjects();
+      if (existingProjects.length) throw new Error("This profile already has saved games. Run the browser harness in a fresh isolated profile; it has not changed your projects.");
+      assert(existingProjects.length === 0, "opening Game Studio does not create a named project");
+      assert(!frame.contentDocument.querySelector("#run").disabled, "guest can run without setup");
+      const earlyResources = frame.contentWindow.performance.getEntriesByType("resource").map((entry) => entry.name);
+      assert(!earlyResources.some((url) => /(?:worker\.mjs|error-format\.mjs|pygame_bridge\.py|sandbox\.html)(?:\?|$)/.test(url)), "Python runtime resources were not fetched before Run");
+      results.push("PASS editor is ready before Python runtime resources are requested");
+
+      const firstSource = "print('browser-first')\n";
+      const firstId = await saveAs("First Browser Game", firstSource);
+      let first = await store.getProject(firstId);
+      assert(first?.source === firstSource && first.id === firstId && first.createdAt && first.updatedAt, "save creates an independent IndexedDB project");
+      const autosavedSource = "print('browser-autosaved')\n";
+      changeCode(autosavedSource);
+      await waitFor(() => frame.contentDocument.querySelector("#save-state")?.textContent === "Saved", "debounced source autosave");
+      await navigate(`game-studio.html?project=${encodeURIComponent(firstId)}`);
+      await waitFor(() => editor()?.value === autosavedSource, "reopen saved source");
+      assert(frame.contentDocument.querySelector("#project-title").textContent === "First Browser Game", "stable project ID restores the project name after navigation");
+
+      await navigate("my-games.html");
+      await waitFor(() => frame.contentDocument.querySelectorAll(".project-card").length === 1, "My Games first card");
+      assert(frame.contentDocument.querySelector("#projects-title")?.textContent.includes("Saved Games") && frame.contentDocument.querySelector("#submitted-title")?.textContent.includes("Submitted Games"), "My Games separates saved and submitted sections");
+      assert(frame.contentDocument.querySelector(".submitted-library .empty-state")?.textContent.includes("not available yet"), "submitted games are clearly inactive");
+      assert(frame.contentDocument.querySelector(".project-modified").textContent.includes("Last changed"), "project card displays its modification date");
+      const coverData = new frame.contentWindow.DataTransfer();
+      const pixel = frame.contentWindow.Uint8Array.from(frame.contentWindow.atob("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jfmgAAAAASUVORK5CYII="), (char) => char.charCodeAt(0));
+      coverData.items.add(new frame.contentWindow.File([pixel], "cover.png", { type: "image/png" }));
+      const coverInput = frame.contentDocument.querySelector(".project-card input[type=file]");
+      coverInput.files = coverData.files;
+      coverInput.dispatchEvent(new frame.contentWindow.Event("change", { bubbles: true }));
+      await waitFor(async () => (await store.getProject(firstId))?.cover?.type === "image/png", "custom game card photo");
+      await waitFor(() => frame.contentDocument.querySelector(".project-thumbnail img")?.src.startsWith("blob:"), "uploaded photo render");
+      assert(frame.contentDocument.querySelector(".project-thumbnail img")?.src.startsWith("blob:"), "uploaded card photo displays on its game card");
+      frame.contentDocument.querySelector(".project-card a").click();
+      await waitFor(() => frame.contentDocument.querySelector("#project-title")?.textContent === "First Browser Game", "project card opens saved game");
+      assert(editor().value === autosavedSource, "project card opens the matching code");
+      const menuToggle = frame.contentDocument.querySelector(".menu-toggle");
+      menuToggle.click();
+      assert(menuToggle.getAttribute("aria-expanded") === "true", "navigation menu opens by button");
+      frame.contentDocument.dispatchEvent(new frame.contentWindow.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      const menuReturnedFocus = menuToggle.getBoundingClientRect().width === 0 || frame.contentDocument.activeElement === menuToggle;
+      assert(menuToggle.getAttribute("aria-expanded") === "false" && menuReturnedFocus, "Escape closes navigation and returns focus when the mobile menu is visible");
+
+      const runtimeSource = "import asyncio\nprint('ACTUAL_BROWSER_RUNTIME')\nasync def main():\n    while True:\n        await asyncio.sleep(0.1)\nasyncio.run(main())\n";
+      const appWindow = frame.contentWindow;
+      const originalFetch = appWindow.fetch.bind(appWindow);
+      appWindow.fetch = (resource, options = {}) => {
+        const path = new URL(resource, appWindow.location.href).pathname;
+        if (!/\/(?:worker\.mjs|error-format\.mjs|pygame_bridge\.py)$/.test(path)) return originalFetch(resource, options);
+        return new Promise((resolve, reject) => {
+          const timer = appWindow.setTimeout(() => originalFetch(resource, options).then(resolve, reject), 5000);
+          options.signal?.addEventListener("abort", () => {
+            appWindow.clearTimeout(timer);
+            reject(new appWindow.DOMException("Aborted", "AbortError"));
+          }, { once: true });
+        });
+      };
+      changeCode(runtimeSource);
+      frame.contentDocument.querySelector("#run").click();
+      await waitFor(() => frame.contentDocument.querySelector("#status")?.dataset.phase === "loading-runtime", "lazy runtime file loading");
+      frame.contentDocument.querySelector("#stop").click();
+      await waitFor(() => frame.contentDocument.querySelector("#status")?.dataset.phase === "stopped", "cancel runtime file loading");
+      assert(!frame.contentDocument.querySelector("iframe[title='Isolated Python worker host']"), "Stop cancels runtime setup before sandbox creation");
+      appWindow.fetch = originalFetch;
+      frame.contentDocument.querySelector("#run").click();
+      await waitFor(() => frame.contentDocument.querySelector("#console")?.textContent.includes("ACTUAL_BROWSER_RUNTIME"), "real Python runtime execution", 90000);
+      const runtimeFrame = frame.contentDocument.querySelector("iframe[title='Isolated Python worker host']");
+      let runtimeOpaque = false;
+      try { void runtimeFrame.contentWindow.location.href; } catch { runtimeOpaque = true; }
+      assert(runtimeFrame?.getAttribute("sandbox") === "allow-scripts" && runtimeOpaque, "Python runs in the opaque-origin iframe sandbox");
+      Object.defineProperty(frame.contentWindow.navigator, "clipboard", { configurable: true, value: { writeText: async (text) => { frame.contentWindow.__copiedText = text; } } });
+      frame.contentDocument.querySelector("#copy-source").click();
+      await waitFor(() => frame.contentDocument.querySelector("#source-status")?.textContent === "Copied.", "copy source button");
+      assert(frame.contentWindow.__copiedText === runtimeSource, "Copy code copies the editor source");
+      frame.contentDocument.querySelector("#copy-console").click();
+      await waitFor(() => frame.contentDocument.querySelector("#copy-status")?.textContent === "Copied.", "copy output button");
+      assert(frame.contentWindow.__copiedText.includes("ACTUAL_BROWSER_RUNTIME"), "Copy output copies program output");
+      frame.contentDocument.querySelector("#restart").click();
+      await waitFor(() => !frame.contentDocument.querySelector("#console")?.textContent.includes("ACTUAL_BROWSER_RUNTIME"), "restart clears prior output");
+      await waitFor(() => frame.contentDocument.querySelector("#console")?.textContent.includes("ACTUAL_BROWSER_RUNTIME"), "restart real Python runtime", 90000);
+      frame.contentDocument.querySelector("#stop").click();
+      await waitFor(() => frame.contentDocument.querySelector("#status")?.dataset.phase === "stopped", "stop real Python runtime");
+      await waitFor(() => frame.contentDocument.querySelector("#save-state")?.textContent === "Saved", "autosave after run");
+      results.push("PASS real Python runs, restarts, and stops inside the opaque-origin sandbox");
+      const errorSource = "raise ValueError('BROWSER_COPY_ERROR')\n";
+      changeCode(errorSource);
+      frame.contentDocument.querySelector("#run").click();
+      await waitFor(() => !frame.contentDocument.querySelector("#python-error")?.hidden, "Python error panel");
+      frame.contentDocument.querySelector("#copy-error").click();
+      await waitFor(() => frame.contentDocument.querySelector("#error-copy-status")?.textContent === "Copied.", "copy error button");
+      assert(frame.contentWindow.__copiedText.includes("BROWSER_COPY_ERROR"), "Copy error copies the traceback details");
+      await waitFor(() => frame.contentDocument.querySelector("#save-state")?.textContent === "Saved", "autosave after Python error");
+
+      const secondSource = "print('browser-second')\n";
+      await navigate("game-studio.html?new=1");
+      await waitFor(() => frame.contentDocument.querySelector("#status")?.dataset.phase === "ready", "new editor after navigation");
+      const secondId = await saveAs("Second Browser Game", secondSource);
+      assert(firstId !== secondId && (await store.listProjects()).length === 2, "multiple projects have independent stable IDs");
+      const unsavedSecond = "print('preserved before opening another game')\n";
+      changeCode(unsavedSecond);
+      await navigate(`game-studio.html?project=${encodeURIComponent(firstId)}`);
+      await waitFor(() => editor()?.value === errorSource, "opening a different saved project");
+      await waitFor(async () => (await store.getProject(secondId))?.source === unsavedSecond || store.readRecovery()?.source === unsavedSecond, "preserve unsaved code while opening another project");
+      assert((await store.getProject(firstId)).source === errorSource, "selected project stays unchanged when opening another project");
+      results.push("PASS unsaved code survives opening another project without overwriting it");
+      await navigate("my-games.html");
+      await waitFor(() => frame.contentDocument.querySelectorAll(".project-card").length === 2, "two project cards");
+      frame.contentDocument.querySelector(".page-heading a.button-primary").click();
+      await waitFor(() => frame.contentWindow.location.pathname.endsWith("/game-studio.html") && new URLSearchParams(frame.contentWindow.location.search).has("new"), "Create New Game link");
+      await waitFor(() => frame.contentDocument.querySelector("#status")?.dataset.phase === "ready", "new game editor");
+      assert((await store.listProjects()).length === 2 && frame.contentDocument.querySelector("#project-title").textContent === "New game", "Create New Game opens a fresh editor without replacing existing projects");
+      await navigate("my-games.html");
+      await waitFor(() => frame.contentDocument.querySelectorAll(".project-card").length === 2, "My Games after Create New Game");
+      const secondCard = [...frame.contentDocument.querySelectorAll(".project-card")].find((card) => card.querySelector("h3").textContent === "Second Browser Game");
+      frame.contentWindow.prompt = () => "Renamed Browser Game";
+      secondCard.querySelectorAll("button")[1].click();
+      await waitFor(() => [...frame.contentDocument.querySelectorAll(".project-card h3")].some((h) => h.textContent === "Renamed Browser Game"), "project rename");
+      assert((await store.getProject(secondId)).title === "Renamed Browser Game", "rename persists without changing ID");
+      const renamedCard = [...frame.contentDocument.querySelectorAll(".project-card")].find((card) => card.querySelector("h3").textContent === "Renamed Browser Game");
+      frame.contentWindow.confirm = () => true;
+      renamedCard.querySelectorAll("button")[2].click();
+      await waitFor(() => frame.contentDocument.querySelectorAll(".project-card").length === 1, "project delete");
+      assert(!(await store.getProject(secondId)), "delete removes only the selected project");
+
+      await navigate(`game-studio.html?project=${encodeURIComponent(firstId)}`);
+      await waitFor(() => frame.contentDocument.querySelector("#project-title")?.textContent === "First Browser Game", "first project for export/import");
+      const exportSource = editor().value;
+      const oldCreate = frame.contentWindow.URL.createObjectURL;
+      const oldClick = frame.contentWindow.HTMLAnchorElement.prototype.click;
+      let fileName = "";
+      frame.contentWindow.URL.createObjectURL = (blob) => { frame.contentWindow.__downloadBlob = blob; return "blob:browser-test"; };
+      frame.contentWindow.HTMLAnchorElement.prototype.click = function () { fileName = this.download; };
+      frame.contentDocument.querySelector("#export-source").click();
+      const exported = await frame.contentWindow.__downloadBlob.text();
+      frame.contentWindow.URL.createObjectURL = oldCreate;
+      frame.contentWindow.HTMLAnchorElement.prototype.click = oldClick;
+      assert(fileName === "First-Browser-Game.py" && exported === exportSource, "export preserves exact editor source in a safe .py download");
+
+      const fileInput = frame.contentDocument.querySelector("#import-file");
+      const win = frame.contentWindow;
+      win.confirm = () => true;
+      const badType = new win.DataTransfer();
+      badType.items.add(new win.File(["not python"], "notes.txt"));
+      fileInput.files = badType.files;
+      fileInput.dispatchEvent(new win.Event("change", { bubbles: true }));
+      assert(frame.contentDocument.querySelector("#project-notice").textContent.includes("ending in .py"), "import rejects a non-Python extension");
+      const badText = new win.DataTransfer();
+      badText.items.add(new win.File([new Uint8Array([255])], "bad.py"));
+      fileInput.files = badText.files;
+      fileInput.dispatchEvent(new win.Event("change", { bubbles: true }));
+      await waitFor(() => frame.contentDocument.querySelector("#project-notice")?.textContent.includes("valid UTF-8"), "invalid UTF-8 rejection");
+      const tooLarge = new win.DataTransfer();
+      tooLarge.items.add(new win.File(["x".repeat(102401)], "large.py"));
+      fileInput.files = tooLarge.files;
+      fileInput.dispatchEvent(new win.Event("change", { bubbles: true }));
+      assert(frame.contentDocument.querySelector("#project-notice").textContent.includes("100 KiB"), "import rejects files over the source limit");
+
+      const imported = "raise RuntimeError('must not run on import')\n";
+      const validFile = new win.DataTransfer();
+      validFile.items.add(new win.File([imported], "imported.py", { type: "text/x-python" }));
+      fileInput.files = validFile.files;
+      fileInput.dispatchEvent(new win.Event("change", { bubbles: true }));
+      await waitFor(() => frame.contentDocument.querySelector("#source-status")?.textContent.includes("Imported imported.py"), "Python import");
+      assert(editor().value === imported && !frame.contentDocument.querySelector("iframe[title='Isolated Python worker host']"), "import loads source but never runs it automatically");
+      assert((await store.getProject(firstId)).source === exportSource, "import from a saved project does not overwrite its stored source");
+      await saveAs("Imported Draft", imported);
+
+      await navigate("game-studio.html?project=missing-project-id");
+      await waitFor(() => frame.contentDocument.querySelector("#project-notice")?.textContent.includes("could not be found"), "invalid project message");
+      assert(!frame.contentDocument.querySelector("#run").disabled, "invalid project route leaves a usable starter editor");
+
+      const recoverySource = "print('recovered in this browser')\n";
+      assert(store.writeRecovery(recoverySource), "recovery draft writes to local storage");
+      await navigate("game-studio.html?new=1");
+      await waitFor(() => !frame.contentDocument.querySelector("#restore-draft").hidden, "optional recovery prompt");
+      assert(editor().value !== recoverySource, "recovery does not silently replace the starter");
+      frame.contentWindow.confirm = () => true;
+      frame.contentDocument.querySelector("#restore-draft").click();
+      assert(editor().value === recoverySource, "explicit recovery restores draft source");
+      await saveAs("Recovered Draft", recoverySource);
+
+      const originalIndexedDb = Object.getOwnPropertyDescriptor(window, "indexedDB");
+      Object.defineProperty(window, "indexedDB", { configurable: true, value: undefined });
+      let storageError = "";
+      try { await store.listProjects(); } catch (error) { storageError = error.message; }
+      if (originalIndexedDb) Object.defineProperty(window, "indexedDB", originalIndexedDb);
+      else delete window.indexedDB;
+      assert(storageError.includes("does not provide local project storage"), "unavailable IndexedDB produces a useful error");
+
+      await navigate("my-games.html");
+      await waitFor(() => !frame.contentDocument.querySelector("#project-count")?.textContent.includes("Loading"), "My Games library load before cleanup");
+      frame.contentWindow.confirm = () => true;
+      while (frame.contentDocument.querySelector(".project-card")) {
+        const beforeDelete = frame.contentDocument.querySelectorAll(".project-card").length;
+        frame.contentDocument.querySelector(".project-card").querySelectorAll("button")[2].click();
+        await waitFor(() => frame.contentDocument.querySelectorAll(".project-card").length === beforeDelete - 1, "delete remaining project");
+      }
+      await waitFor(() => frame.contentDocument.querySelectorAll(".project-card").length === 0 && !frame.contentDocument.querySelector("#project-message").hidden, "empty My Games library");
+      assert(frame.contentDocument.querySelector("#project-message").textContent.includes("haven’t saved"), "empty state explains how to start");
+      output.textContent = results.join("\n");
+      document.title = "PASS Game Studio browser tests";
+    } catch (error) {
+      output.textContent = `${results.join("\n")}\nFAIL ${error.stack || error}`;
+      document.title = "FAIL Game Studio browser tests";
+    }
+  </script>
+</body>
+</html>

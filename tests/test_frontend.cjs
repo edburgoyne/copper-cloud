@@ -151,23 +151,26 @@ test("compact navigation exposes and closes its menu", async () => {
   assert.equal(toggle.focused, true);
 });
 
-test("Game Studio is discoverable and presents a read-only playable sample", () => {
-  for (const filename of ["index.html", "games.html", "play.html", "create.html", "about.html", "game-studio.html"]) {
+test("Game Studio is discoverable and exposes saved project controls", () => {
+  for (const filename of ["index.html", "games.html", "play.html", "create.html", "about.html", "game-studio.html", "my-games.html"]) {
     const page = fs.readFileSync(path.join(__dirname, `../${filename}`), "utf8");
     assert.match(page, /href="\.\/game-studio\.html"/);
   }
   assert.ok((fs.readFileSync(path.join(__dirname, "../games.html"), "utf8").match(/href="\.\/game-studio\.html"/g) || []).length >= 2);
-  assert.match(studioPage, /GAME STUDIO — WORK IN PROGRESS/);
-  assert.match(studioPage, /id="code"[^>]*readonly/);
+  assert.match(studioPage, /id="code"/);
+  assert.match(studioPage, /id="save-project"/);
+  assert.match(studioPage, /id="import-file"/);
+  assert.match(studioPage, /id="export-source"/);
   assert.match(studioPage, /id="run"/);
   assert.match(studioPage, /id="stop"/);
   assert.match(studioPage, /id="restart"/);
-  assert.match(studioPage, /data-studio-mode="fixed-demo"/);
-  assert.doesNotMatch(studioPage, /contenteditable|<form/i);
+  assert.match(studioPage, /data-studio-mode="editor"/);
+  assert.match(studioPage, /href="\.\/my-games\.html"/);
+  assert.doesNotMatch(studioPage, /readonly|contenteditable/i);
 });
 
 test("shared auth navigation is initialized on every site page and uses profiles for usernames", () => {
-  for (const filename of ["index.html", "games.html", "play.html", "create.html", "about.html", "game-studio.html", "auth.html", "account.html", "forgot-password.html", "reset-password.html"]) {
+  for (const filename of ["index.html", "games.html", "play.html", "create.html", "about.html", "game-studio.html", "my-games.html", "auth.html", "account.html", "forgot-password.html", "reset-password.html"]) {
     const page = fs.readFileSync(path.join(__dirname, `../${filename}`), "utf8");
     assert.match(page, /id="auth-nav"/);
     assert.match(page, /site-assets\/auth-ui\.js/);
@@ -190,9 +193,12 @@ test("auth navigation is not connected to Game Studio worker or iframe messaging
   assert.doesNotMatch(authUi, /postMessage|contentWindow/);
 });
 
-test("public demo requests only the bundled sample ID and sandbox rejects arbitrary code messages", () => {
-  assert.match(studioHost, /const demoSampleId = "dino-runner"/);
-  assert.match(studioHost, /type: "start-demo", sample: demoSampleId/);
-  assert.match(studioSandbox, /message\.type === "start-demo"[\s\S]{0,120}message\.sample === "dino-runner"/);
+test("editable projects run only through the opaque-origin sandbox protocol", () => {
+  assert.match(studioHost, /type: "start", code: session\.source/);
+  assert.match(studioHost, /frame\.setAttribute\("sandbox", "allow-scripts"\)/);
+  assert.doesNotMatch(studioHost, /"allow-same-origin"/);
+  assert.match(studioSandbox, /event\.source !== parent/);
   assert.match(studioSandbox, /message\.type === "start" && !PUBLIC_DEMO_BUNDLE/);
+  assert.match(studioPage, /site-assets\/studio-projects\.js/);
+  assert.match(studioHost, /runtimePromise/);
 });

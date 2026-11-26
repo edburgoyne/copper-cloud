@@ -26,7 +26,7 @@ def check_site(root=ROOT):
     for filename in (
         "styles.css", "site.js", "logo.svg", "favicon.svg", "game-placeholder.svg",
         "game-studio-sample.py", "game-studio-preview.svg", "supabase-config.js",
-        "supabase-client.js", "auth.js", "auth-ui.js",
+        "supabase-client.js", "auth.js", "auth-ui.js", "project-store.js", "my-games.js", "studio-projects.js",
     ):
         if not (site / "site-assets" / filename).is_file():
             raise ValueError(f"Assembled site asset is missing: {filename}")
@@ -71,7 +71,7 @@ def check_site(root=ROOT):
     for marker in ('fetch("./games.json"', 'cache: "no-cache"', "createGameCard", "game.page_url"):
         if marker not in frontend_script:
             raise ValueError(f"Frontend does not appear to load and render games.json ({marker}).")
-    html_pages = ("index.html", "games.html", "play.html", "create.html", "about.html", "game-studio.html", "auth.html", "account.html", "forgot-password.html", "reset-password.html")
+    html_pages = ("index.html", "games.html", "play.html", "create.html", "about.html", "game-studio.html", "my-games.html", "auth.html", "account.html", "forgot-password.html", "reset-password.html")
     for filename in html_pages:
         page = (site / filename).read_text(encoding="utf-8")
         if "./site-assets/styles.css" not in page or "./site-assets/site.js" not in page:
@@ -88,11 +88,11 @@ def check_site(root=ROOT):
         raise ValueError("Games page is missing its contextual Game Studio link.")
 
     studio_page = (site / "game-studio.html").read_text(encoding="utf-8")
-    for marker in ('id="code"', "readonly", 'id="run"', 'id="stop"', 'id="restart"', "Dino Runner"):
+    for marker in ('id="code"', 'id="save-project"', 'id="import-file"', 'id="export-source"', 'id="run"', 'id="stop"', 'id="restart"', 'href="./my-games.html"'):
         if marker not in studio_page:
-            raise ValueError(f"Game Studio page is missing required demo markup ({marker}).")
-    if "contenteditable" in studio_page.lower() or "<form" in studio_page.lower():
-        raise ValueError("Game Studio page must not expose editable or submitting form controls.")
+            raise ValueError(f"Game Studio page is missing project editor markup ({marker}).")
+    if "readonly" in studio_page.lower() or 'data-studio-mode="editor"' not in studio_page:
+        raise ValueError("Game Studio must expose its editable project editor.")
 
     runtime_dir = site / "site-assets" / "game-studio-runtime"
     sandbox = runtime_dir / "sandbox.html"
@@ -100,19 +100,20 @@ def check_site(root=ROOT):
     if not sandbox.is_file() or not host_script.is_file():
         raise ValueError("Assembled Game Studio runner files are missing.")
     sandbox_source = sandbox.read_text(encoding="utf-8")
-    if "const PUBLIC_DEMO_BUNDLE = null;" in sandbox_source or '"dino-runner"' not in sandbox_source:
-        raise ValueError("Public Game Studio sandbox is missing the bundled Dino Runner allowlist.")
-    if 'message.type === "start-demo"' not in sandbox_source or 'message.type === "start" && !PUBLIC_DEMO_BUNDLE' not in sandbox_source:
-        raise ValueError("Public sandbox must accept the fixed sample ID and reject editor-mode source messages.")
+    if "const PUBLIC_DEMO_BUNDLE = null;" not in sandbox_source:
+        raise ValueError("Game Studio sandbox must load user programs from the isolated host, not embed project code.")
+    if 'message.type === "start" && !PUBLIC_DEMO_BUNDLE' not in sandbox_source:
+        raise ValueError("Game Studio sandbox must accept source only through its isolated worker protocol.")
     if "default-src 'none'" not in sandbox_source or "script-src 'unsafe-inline' 'unsafe-eval'" not in sandbox_source:
         raise ValueError("Public runtime sandbox is missing its restrictive iframe Content Security Policy.")
     host_source = host_script.read_text(encoding="utf-8")
-    if 'const demoSampleId = "dino-runner"' not in host_source or 'type: "start-demo", sample: demoSampleId' not in host_source:
-        raise ValueError("Public Game Studio host must start only the fixed Dino Runner sample.")
+    if 'type: "start", code: session.source' not in host_source:
+        raise ValueError("Game Studio host does not send edited source to its sandbox runtime.")
     if 'frame.setAttribute("sandbox", "allow-scripts")' not in host_source or '"allow-same-origin"' in host_source:
         raise ValueError("Public Game Studio host must retain an opaque-origin sandboxed iframe.")
-    if (site / "experiments" / "browser-pygame-studio" / "index.html").exists():
-        raise ValueError("Editable Game Studio prototype must not be published with the public demo.")
+    for runtime_file in ("worker.mjs", "error-format.mjs", "pygame_bridge.py"):
+        if not (runtime_dir / runtime_file).is_file():
+            raise ValueError(f"Game Studio runtime dependency is missing: {runtime_file}")
 
     for entry in public_games:
         game_id = entry["id"]

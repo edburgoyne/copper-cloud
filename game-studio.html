@@ -2,40 +2,36 @@
 <html lang="en">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#17191b">
-  <meta name="description" content="Explore the Copper Cloud Game Studio preview and view a sample Python game."><title>Game Studio (WIP) — Copper Cloud</title>
-  <link rel="icon" type="image/svg+xml" href="./site-assets/favicon.svg"><link rel="stylesheet" href="./site-assets/styles.css"><script src="./site-assets/site.js" defer></script><script src="./site-assets/game-studio-runtime/studio.js" defer></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script type="module" src="./site-assets/auth-ui.js"></script></head>
-<body data-page="game-studio" data-studio-mode="fixed-demo" data-sample-source="./site-assets/game-studio-sample.py" data-sandbox-url="./site-assets/game-studio-runtime/sandbox.html">
+  <meta name="description" content="Write, run, and save your Python games in the Copper Cloud Game Studio."><title>Game Studio — Copper Cloud</title>
+  <link rel="icon" type="image/svg+xml" href="./site-assets/favicon.svg"><link rel="stylesheet" href="./site-assets/styles.css"><script src="./site-assets/site.js" defer></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script type="module" src="./site-assets/auth-ui.js"></script><script type="module" src="./site-assets/studio-projects.js"></script><script src="./site-assets/game-studio-runtime/studio.js" defer></script>
+</head>
+<body data-page="game-studio" data-studio-mode="editor" data-sample-source="./site-assets/game-studio-sample.py" data-sandbox-url="./site-assets/game-studio-runtime/sandbox.html">
   <a class="skip-link" href="#main">Skip to content</a>
-  <header class="site-header"><div class="shell header-inner"><a class="brand" href="./" aria-label="Copper Cloud home"><img src="./site-assets/logo.svg" alt="" width="42" height="42"><span>COPPER<span class="brand-light"> CLOUD</span><small>THE COMMUNITY ARCADE</small></span></a><button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-nav">Menu <span aria-hidden="true">☰</span></button><nav class="site-nav" id="site-nav" aria-label="Main navigation"><a href="./games.html">Games</a><a href="./create.html">Create</a><a href="./game-studio.html" aria-current="page">Game Studio (WIP)</a><a href="./about.html">About</a></nav><div class="auth-nav" id="auth-nav"></div></div></header>
+  <header class="site-header"><div class="shell header-inner"><a class="brand" href="./" aria-label="Copper Cloud home"><img src="./site-assets/logo.svg" alt="" width="42" height="42"><span>COPPER<span class="brand-light"> CLOUD</span><small>THE COMMUNITY ARCADE</small></span></a><button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-nav">Menu <span aria-hidden="true">☰</span></button><nav class="site-nav" id="site-nav" aria-label="Main navigation"><a href="./games.html">Games</a><a href="./create.html">Create</a><a href="./game-studio.html" aria-current="page">Game Studio</a><a href="./my-games.html">My Games</a><a href="./about.html">About</a></nav><div class="auth-nav" id="auth-nav"></div></div></header>
   <main id="main" class="shell page-main studio-page">
     <a class="back-link" href="./games.html"><span aria-hidden="true">←</span> Back to the arcade</a>
-    <div class="page-heading page-heading-wide"><p class="eyebrow"><span class="eyebrow-line"></span> THE WORKSHOP / BETA</p><h1>Game Studio<span class="heading-dot">.</span></h1><p>We're building a way to create and play Python games directly in your browser. For now, explore a sample game, read its source, and see what is on the way.</p></div>
-
-    <section class="studio-wip callout" aria-labelledby="studio-wip-title">
-      <div><p class="eyebrow">GAME STUDIO — WORK IN PROGRESS</p><h2 id="studio-wip-title">A first look at what's coming.</h2><p>We're building a way for you to create and play Python games directly in your browser. For now, you can run a bundled sample, view its read-only source, and try its controls.</p><p><strong>Coming later:</strong> Write your own games, experiment with Python, and submit your creations to the Copper Cloud arcade.</p></div><span aria-hidden="true">✳</span>
-    </section>
+    <div class="page-heading page-heading-wide"><p class="eyebrow"><span class="eyebrow-line"></span> THE WORKSHOP / BETA</p><h1>Game Studio<span class="heading-dot">.</span></h1><p>Write a Python game, try it in the isolated preview, and save it to My Games when you’re ready. The Python runtime starts when you press Run.</p><a class="text-link" href="./my-games.html">View My Games <span aria-hidden="true">→</span></a></div>
 
     <section class="section studio-demo" aria-labelledby="sample-title">
-      <div class="section-heading"><div><p class="eyebrow">A SAMPLE GAME</p><h2 id="sample-title">Dino Runner<span class="heading-dot">.</span></h2><p class="section-intro">A small Pygame game with one goal: jump over the cacti and keep going.</p></div><a class="text-link" href="./site-assets/game-studio-sample.py" download>Download sample source <span aria-hidden="true">↓</span></a></div>
+      <div class="section-heading"><div><p class="eyebrow">PYTHON / PYGAME</p><h2 id="sample-title"><span id="project-title">New game</span><span class="heading-dot">.</span></h2><p class="section-intro">Your code autosaves in this browser after you save the game once.</p></div><a class="text-link" href="./site-assets/game-studio-sample.py" download>Download sample source <span aria-hidden="true">↓</span></a></div>
       <div class="studio-workspace">
         <section class="studio-panel" aria-labelledby="source-heading">
-          <div class="studio-panel-heading"><div><p class="eyebrow">PYTHON / READ ONLY</p><h3 id="source-heading">Sample source</h3></div><span class="read-only-tag">VIEW ONLY</span></div>
-          <label class="sr-only" for="code">Dino Runner Python source code</label>
-          <textarea id="code" class="studio-code" readonly wrap="off" spellcheck="false" aria-describedby="source-status">Loading sample source…</textarea>
-          <div class="studio-source-actions"><button id="copy-source" class="button button-secondary button-small" type="button">Copy source</button><p id="source-status" class="studio-inline-status" role="status">Loading the bundled sample source.</p></div>
+          <div class="studio-panel-heading"><div><p class="eyebrow">PYTHON / EDITOR</p><h3 id="source-heading">Game source</h3></div><span class="read-only-tag">AUTOSAVE</span></div>
+          <label class="sr-only" for="code">Python game source code</label>
+          <textarea id="code" class="studio-code" wrap="off" spellcheck="false" aria-describedby="source-status">Loading editor…</textarea>
+          <div class="studio-source-actions"><button id="save-project" class="button button-primary button-small" type="button" disabled>Save game</button><span id="save-state" class="studio-inline-status" role="status">Loading editor…</span><button id="copy-source" class="button button-secondary button-small" type="button">Copy source</button><button id="export-source" class="button button-secondary button-small" type="button">Export .py</button><label class="button button-secondary button-small project-photo-label" for="import-file">Import .py</label><input id="import-file" class="sr-only" type="file" accept=".py,text/x-python" aria-label="Import Python source file"><button id="restore-draft" class="button button-secondary button-small" type="button" hidden>Restore unsaved draft</button><p id="source-status" class="studio-inline-status" role="status"></p><p id="project-notice" class="studio-inline-status" role="status"></p></div>
         </section>
 
         <section class="studio-panel" aria-labelledby="preview-heading">
-          <div class="studio-panel-heading"><div><p class="eyebrow">GAME PREVIEW</p><h3 id="preview-heading">Runner in the copper dusk</h3></div><span class="read-only-tag">STATIC IMAGE</span></div>
-          <div class="studio-preview"><img src="./site-assets/game-studio-preview.svg" alt="" aria-hidden="true" width="800" height="400"><canvas id="preview" width="800" height="400" tabindex="0" aria-label="Dino Runner game preview. Click here to focus keyboard controls."></canvas></div>
+          <div class="studio-panel-heading"><div><p class="eyebrow">GAME PREVIEW</p><h3 id="preview-heading">Your game</h3></div><span class="read-only-tag">ISOLATED PREVIEW</span></div>
+          <div class="studio-preview"><img src="./site-assets/game-studio-preview.svg" alt="" aria-hidden="true" width="800" height="400"><canvas id="preview" width="800" height="400" tabindex="0" aria-label="Python game preview. Click here to focus keyboard controls."></canvas></div>
           <div class="studio-actions" aria-label="Demo controls">
-            <button id="run" class="button button-primary" type="button" disabled>Run sample</button>
+            <button id="run" class="button button-primary" type="button" disabled>Run</button>
             <button id="stop" class="button button-secondary button-small" type="button" disabled>Stop</button>
             <button id="restart" class="button button-secondary button-small" type="button" disabled>Restart</button>
           </div>
-          <p id="status" class="studio-run-status" role="status" data-phase="loading">Loading the bundled sample…</p>
-          <div class="studio-controls"><h4>Sample controls</h4><ul><li><kbd>Space</kbd> or <kbd>↑</kbd>: jump</li><li><kbd>R</kbd>: restart after Game Over</li><li><kbd>Esc</kbd>: exit the sample</li></ul><p>Click the preview to focus keyboard controls. A fresh worker is created for each Run or Restart.</p></div>
+          <p id="status" class="studio-run-status" role="status" data-phase="loading">Loading the editor…</p>
+          <div class="studio-controls"><h4>Preview controls</h4><p>Keyboard and mouse events go to the preview while it is focused. Controls depend on your Python game. A fresh worker is created for each Run or Restart.</p></div>
         </section>
       </div>
 
@@ -46,6 +42,6 @@
       <p class="studio-doc-link"><a class="text-link" href="./GAME_CREATION_GUIDE.md">Read the game creation guide <span aria-hidden="true">↗</span></a></p>
     </section>
   </main>
-  <footer class="site-footer"><div class="shell footer-inner"><div><a class="footer-brand" href="./">✦ &nbsp; COPPER CLOUD</a><p>A little world for playing and making.</p></div><nav aria-label="Footer navigation"><a href="./games.html">Games</a><a href="./create.html">Create</a><a href="./about.html">About</a></nav><p class="footer-signoff">MADE FOR CURIOUS MINDS <span>✳</span></p></div></footer>
+  <footer class="site-footer"><div class="shell footer-inner"><div><a class="footer-brand" href="./">✦ &nbsp; COPPER CLOUD</a><p>A little world for playing and making.</p></div><nav aria-label="Footer navigation"><a href="./games.html">Games</a><a href="./create.html">Create</a><a href="./game-studio.html">Game Studio</a><a href="./my-games.html">My Games</a><a href="./about.html">About</a></nav><p class="footer-signoff">MADE FOR CURIOUS MINDS <span>✳</span></p></div></footer>
 </body>
 </html>
