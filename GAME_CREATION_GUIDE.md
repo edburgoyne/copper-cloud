@@ -1,6 +1,8 @@
 # Make a game for Copper Cloud
 
-The public Game Studio (WIP) preview currently shows and runs one fixed Dino Runner sample. Its source display is read-only; visitors cannot run their own code or submit games there. Use the Pygbag workflow in this guide to prepare games for the arcade.
+Game Studio lets students write and run Python games in an isolated browser preview, save local projects, and submit a copy for review. Sign in, open My Games, and choose **Submit a saved game** to send one. Admins can recommend changes or approval; a Super Admin makes the final decision. Approval does not publish a game. Publishing still requires a manual repository change.
+
+The Game Studio editor and submission workflow accept Python source files up to 5 MiB (5,242,880 bytes). Large programs may take longer to run or exceed browser memory and runtime limits; start with a small game and add resources gradually.
 
 You can make a small game with Python and Pygame, then use Pygbag to try it in a browser. Start with something you can play in a few minutes: one player, one goal, and one challenge. Add more only after that version works.
 
@@ -76,14 +78,14 @@ Avoid a blocking or infinite loop that never yields, long `time.sleep()` calls, 
 
 Pygbag downloads browser runtime files, so building or playing a browser version can require an internet connection. A successful build alone does not prove the game plays correctly.
 
-## Checklist for a future submission
+## Submission checklist
 
 - [ ] My project has a working `main.py` and an async loop that yields every frame.
 - [ ] Needed files are in `assets/`, use relative paths, and are allowed to be shared.
 - [ ] I can explain the important parts of my code and have removed secrets and private information.
 - [ ] I included a title, creator label, category, description, controls, screen dimensions, and an accessible thumbnail description.
 - [ ] I tested the game in a browser, including its controls and restart, and fixed problems I found.
-- [ ] I am ready for a review and understand submissions are not open yet.
+- [ ] I am ready for a review and understand an approval does not publish the game automatically.
 
 ## Ask an AI coding assistant
 

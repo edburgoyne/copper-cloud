@@ -10,6 +10,7 @@
       <form id="submission-form">
         <select id="submission-project"></select><input id="submission-title">
         <textarea id="submission-description"></textarea><textarea id="submission-controls"></textarea>
+        <input id="submission-cover" type="file"><img id="submission-cover-preview" hidden><button id="submission-cover-remove" type="button" hidden>Remove cover</button>
         <button id="submission-send" type="submit">Submit</button><p id="submission-message"></p>
       </form>
       <p id="submission-source-note"></p>
@@ -23,8 +24,13 @@
       listeners: [],
       submissions: [],
       feedback: [{ event_type: "changes_requested", feedback: "Add a clear start button.", created_at: new Date().toISOString() }],
-      nextSubmitError: null,
+      nextSubmitError: null, uploadCalls: [], removedPaths: [],
       calls: [],
+      storage: { from(bucket) { return {
+        upload: async (path, file, options) => { fake.uploadCalls.push({ bucket, path, file, options }); return { data: { path }, error: null }; },
+        remove: async (paths) => { fake.removedPaths.push(...paths); return { data: paths.map((path) => ({ name: path })), error: null }; },
+        createSignedUrl: async (path) => ({ data: { signedUrl: `blob:private/${path}` }, error: null }),
+      }; } },
       auth: {
         getSession: async () => ({ data: { session: fake.session }, error: null }),
         onAuthStateChange: (callback) => { fake.listeners.push(callback); return { data: { subscription: { unsubscribe() {} } } }; },
@@ -37,7 +43,7 @@
           fake.nextSubmitError = null;
           return { data: null, error: { message: error } };
         }
-        const id = "submission-1";
+        const id = `submission-${fake.submissions.length + 1}`;
         fake.submissions = [{ id, user_id: fake.session.user.id, title: args.p_title, description: args.p_description, controls: args.p_controls, status: "submitted", created_at: new Date().toISOString(), updated_at: new Date().toISOString() }];
         return { data: id, error: null };
       },
@@ -67,6 +73,12 @@
     }
     try {
       const store = await import("../site-assets/project-store.js");
+      const submissionApi = await import("../site-assets/submissions.js");
+      const maxPython = "p".repeat(5242880);
+      assert(submissionApi.validateSubmission({ title: "Five MiB Game", description: "Exact source size", controls: "Arrow keys" }, maxPython).title === "Five MiB Game", "submission validation accepts exactly 5 MiB of Python source");
+      let sourceLimitError = "";
+      try { submissionApi.validateSubmission({ title: "Five MiB Game", description: "Exact source size", controls: "Arrow keys" }, `${maxPython}x`); } catch (error) { sourceLimitError = error.message; }
+      assert(sourceLimitError.includes("5 MiB"), "submission validation rejects over-limit source without truncation");
       const project = await store.createProject({ title: "Browser Submit Game", source: "print('from saved project')\n", ownerId: "guest" });
       await import("../site-assets/submission-ui.js");
       await waitFor(() => document.querySelector("#submission-project").options.length > 1, "saved project choice");
@@ -78,7 +90,7 @@
       document.querySelector("#submission-form").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
       await waitFor(() => !document.querySelector("#submission-auth-notice").hidden, "guest login notice");
       assert(fake.calls.length === 0, "guest is asked to log in and no RPC is sent");
-      const savedDraft = JSON.parse(localStorage.getItem("copper-cloud-submission-draft-v1"));
+      const savedDraft = await store.readSubmissionDraft("form");
       assert(savedDraft.source === project.source && savedDraft.projectId === project.id, "guest selection and Python source are preserved for login");
 
       fake.session = { user: { id: "account-1" } };
@@ -87,20 +99,40 @@
       document.querySelector("#submission-form").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
       await waitFor(() => document.querySelector("#submission-message").textContent.includes("submitted"), "submission success");
       const submitCall = fake.calls.find((call) => call.name === "submit_game");
-      assert(submitCall.args.p_title === "Browser Submit Game" && submitCall.args.p_source_code === project.source && submitCall.args.p_controls === "Use arrow keys to move.", "submission sends the selected saved source with the exact RPC parameters");
+      assert(submitCall.args.p_title === "Browser Submit Game" && submitCall.args.p_source_code === project.source && submitCall.args.p_controls === "Use arrow keys to move." && submitCall.args.p_cover_image_path === null, "submission sends the selected saved source and optional empty cover with exact RPC arguments");
       assert(fake.lastFilter[0] === "game_submissions" && fake.lastFilter[1] === "user_id" && fake.lastFilter[2] === "account-1", "submission list is scoped to the signed-in user");
       const card = document.querySelector(".submission-card");
       assert(card?.textContent.includes("Waiting for review") && card.textContent.includes("Browser Submit Game"), "submission list renders title and current status");
       card.querySelector("button").click();
       await waitFor(() => card.textContent.includes("Add a clear start button."), "review feedback");
       assert(card.textContent.includes("Reviewer feedback"), "details show feedback from the feedback RPC");
+      assert(card.querySelector(".submission-edit-link")?.href.includes("editSubmission=submission-1"), "open submissions provide an Edit Submission route into Game Studio");
+
+      const file = new File(["fake png bytes"], "cover.png", { type: "image/png" });
+      const transfer = new DataTransfer(); transfer.items.add(file);
+      const coverInput = document.querySelector("#submission-cover"); coverInput.files = transfer.files;
+      coverInput.dispatchEvent(new Event("change", { bubbles: true }));
+      assert(!document.querySelector("#submission-cover-preview").hidden, "optional cover image has an immediate preview");
+      document.querySelector("#submission-form").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      await waitFor(() => fake.uploadCalls.length === 1 && fake.calls.filter((call) => call.name === "submit_game").length === 2, "cover upload and second submission");
+      const uploaded = fake.uploadCalls[0];
+      const coverSubmission = fake.calls.filter((call) => call.name === "submit_game")[1];
+      assert(uploaded.bucket === "submission-covers" && uploaded.path.startsWith("account-1/") && uploaded.options.upsert === false, "cover uses a private bucket and generated owner-scoped object name");
+      assert(coverSubmission.args.p_cover_image_path === uploaded.path, "submission RPC stores the private storage object reference");
+
+      const transferAgain = new DataTransfer(); transferAgain.items.add(file); coverInput.files = transferAgain.files;
+      coverInput.dispatchEvent(new Event("change", { bubbles: true }));
+      fake.nextSubmitError = "submission rejected for test";
+      document.querySelector("#submission-form").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      await waitFor(() => fake.removedPaths.length === 1, "failed submission cover cleanup");
+      assert(fake.removedPaths[0].startsWith("account-1/"), "failed submission removes its unreferenced private cover upload");
 
       fake.nextSubmitError = "You already have three open game submissions";
       document.querySelector("#submission-form").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
       await waitFor(() => document.querySelector("#submission-message").textContent.includes("3 games waiting"), "submission limit message");
       assert(document.querySelector("#submission-message").textContent.includes("3 games waiting"), "submission limit is explained without exposing a database error");
       await store.deleteProject(project.id, "guest");
-      localStorage.removeItem("copper-cloud-submission-draft-v1");
+      await store.clearSubmissionDraft("form");
       output.textContent = results.join("\n");
       document.title = "PASS submission flow browser checks";
     } catch (error) {

@@ -26,7 +26,7 @@ const demoSampleId = "dino-runner";
 const demoSamplePath = document.body.dataset.sampleSource || "./samples/basic.py";
 const runtimeBase = document.body.dataset.runtimeBase || "./site-assets/game-studio-runtime/";
 const sandboxUrl = document.body.dataset.sandboxUrl || "./sandbox.html";
-const MAX_CODE_BYTES = 100 * 1024;
+const MAX_CODE_BYTES = 5 * 1024 * 1024;
 const MAX_OUTPUT = 100 * 1024;
 const MAX_DIAGNOSTICS = 24 * 1024;
 let trustedSources;
@@ -175,7 +175,7 @@ async function run(source) {
   const program = demoMode ? null : source;
   if (!demoMode) {
     if (new TextEncoder().encode(program).length > MAX_CODE_BYTES) {
-      setStatus("The program exceeds the 100 KiB source limit.", "error");
+      setStatus("The program exceeds the 5 MiB source limit.", "error");
       return;
     }
     if (!program.trim()) {

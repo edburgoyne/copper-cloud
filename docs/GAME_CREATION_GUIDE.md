@@ -10,7 +10,7 @@ The runtime is experimental. A headed Chromium smoke suite passed on 2026-11-17 
 
 - Pyodide 314.0.7, with CPython 3.14.2 compiled to WebAssembly.
 - pygame-ce 2.5.7.
-- Maximum submitted source: 100 KiB.
+- Maximum Python source: 5 MiB (5,242,880 bytes).
 - Display surface: each dimension must be between 1 and 1280 by 1 and 960 pixels.
 - The adapter transfers complete RGBA frames to the page, with a 30 FPS transfer cap. A 640×400 frame is about 0.98 MiB before browser-side work.
 - A new disposable worker and interpreter are used for every run. Stop terminates the worker, including a synchronous loop that does not yield.

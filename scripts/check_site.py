@@ -95,22 +95,31 @@ def check_site(root=ROOT):
         raise ValueError("Game Studio must expose its editable project editor.")
 
     my_games_page = (site / "my-games.html").read_text(encoding="utf-8")
-    for marker in ('id="submission-form"', 'id="submission-project"', 'id="submission-title"', 'id="submission-description"', 'id="submission-controls"', 'id="submissions-grid"', 'site-assets/submission-ui.js'):
+    for marker in ('id="submission-form"', 'id="submission-project"', 'id="submission-title"', 'id="submission-description"', 'id="submission-controls"', 'id="submission-cover"', 'id="submissions-grid"', 'site-assets/submission-ui.js'):
         if marker not in my_games_page:
             raise ValueError(f"My Games submission flow is missing required markup ({marker}).")
-    if '.rpc("submit_game"' not in (site / "site-assets" / "submissions.js").read_text(encoding="utf-8"):
-        raise ValueError("My Games submission flow must use the existing submit_game RPC.")
+    submission_script = (site / "site-assets" / "submissions.js").read_text(encoding="utf-8")
+    if '.rpc("submit_game"' not in submission_script or "p_cover_image_path:" not in submission_script or "p_source_code:" not in submission_script:
+        raise ValueError("My Games submission flow must use the source-bearing submission RPC.")
 
     review_page = (site / "review-submissions.html").read_text(encoding="utf-8")
     for marker in ('id="review-access-message"', 'id="review-content"', 'id="review-list"', 'site-assets/review-submissions.js'):
         if marker not in review_page:
             raise ValueError(f"Submission review page is missing required markup ({marker}).")
     review_script = (site / "site-assets" / "review-submissions.js").read_text(encoding="utf-8")
-    for marker in ('"review_submission"', '"decide_submission"', '"approve"', 'source_code', 'View Python source (read only)'):
+    for marker in ('"review_submission"', '"decide_submission"', '"approve"', '"reject"', 'source_code', 'cover_image_path', 'View Python source (read only)'):
         if marker not in review_script:
             raise ValueError(f"Submission review page is missing reviewer behavior ({marker}).")
     if "published_games" in review_script or "insert(" in review_script:
         raise ValueError("Submission review must not automatically publish or add games.")
+    if root == ROOT:
+        source_limit_migration = root / "supabase" / "migrations" / "20261126000000_submission_source_images.sql"
+        if not source_limit_migration.is_file():
+            raise ValueError("Incremental source and cover image migration is missing.")
+        source_limit_sql = source_limit_migration.read_text(encoding="utf-8")
+        for marker in ("5242880", "3145728", "public = false", "submit_game (", "edit_submission ("):
+            if marker not in source_limit_sql:
+                raise ValueError(f"Incremental source and image migration is missing required configuration ({marker}).")
 
     runtime_dir = site / "site-assets" / "game-studio-runtime"
     sandbox = runtime_dir / "sandbox.html"

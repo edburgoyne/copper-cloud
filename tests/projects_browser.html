@@ -83,8 +83,8 @@
 
       await navigate("my-games.html");
       await waitFor(() => frame.contentDocument.querySelectorAll(".project-card").length === 1, "My Games first card");
-      assert(frame.contentDocument.querySelector("#projects-title")?.textContent.includes("Saved Games") && frame.contentDocument.querySelector("#submitted-title")?.textContent.includes("Submitted Games"), "My Games separates saved and submitted sections");
-      assert(frame.contentDocument.querySelector(".submitted-library .empty-state")?.textContent.includes("not available yet"), "submitted games are clearly inactive");
+      assert(frame.contentDocument.querySelector("#projects-title")?.textContent.includes("Saved Games") && frame.contentDocument.querySelector("#submitted-title")?.textContent.includes("My Submissions"), "My Games separates saved and submitted sections");
+      assert(frame.contentDocument.querySelector(".submitted-library .empty-state")?.textContent.includes("Log in to see your submissions"), "submission section explains that sign-in is required");
       assert(frame.contentDocument.querySelector(".project-modified").textContent.includes("Last changed"), "project card displays its modification date");
       const coverData = new frame.contentWindow.DataTransfer();
       const pixel = frame.contentWindow.Uint8Array.from(frame.contentWindow.atob("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jfmgAAAAASUVORK5CYII="), (char) => char.charCodeAt(0));
@@ -164,7 +164,7 @@
       changeCode(unsavedSecond);
       await navigate(`game-studio.html?project=${encodeURIComponent(firstId)}`);
       await waitFor(() => editor()?.value === errorSource, "opening a different saved project");
-      await waitFor(async () => (await store.getProject(secondId))?.source === unsavedSecond || store.readRecovery()?.source === unsavedSecond, "preserve unsaved code while opening another project");
+      await waitFor(async () => (await store.getProject(secondId))?.source === unsavedSecond || (await store.readRecovery())?.source === unsavedSecond, "preserve unsaved code while opening another project");
       assert((await store.getProject(firstId)).source === errorSource, "selected project stays unchanged when opening another project");
       results.push("PASS unsaved code survives opening another project without overwriting it");
       await navigate("my-games.html");
@@ -214,10 +214,18 @@
       fileInput.dispatchEvent(new win.Event("change", { bubbles: true }));
       await waitFor(() => frame.contentDocument.querySelector("#project-notice")?.textContent.includes("valid UTF-8"), "invalid UTF-8 rejection");
       const tooLarge = new win.DataTransfer();
-      tooLarge.items.add(new win.File(["x".repeat(102401)], "large.py"));
+      tooLarge.items.add(new win.File(["x".repeat(5242881)], "large.py"));
       fileInput.files = tooLarge.files;
       fileInput.dispatchEvent(new win.Event("change", { bubbles: true }));
-      assert(frame.contentDocument.querySelector("#project-notice").textContent.includes("100 KiB"), "import rejects files over the source limit");
+      assert(frame.contentDocument.querySelector("#project-notice").textContent.includes("5 MiB"), "import rejects files over the source limit");
+
+      const exactLimitSource = "x".repeat(5242880);
+      const maxProject = await store.createProject({ title: "Exact 5 MiB Game", source: exactLimitSource, ownerId: "guest" });
+      assert(new TextEncoder().encode((await store.getProject(maxProject.id)).source).byteLength === 5242880, "IndexedDB stores exactly 5 MiB of source without truncation");
+      await store.deleteProject(maxProject.id, "guest");
+      let tooLargeError = "";
+      try { await store.createProject({ title: "Too Large Game", source: `${exactLimitSource}x`, ownerId: "guest" }); } catch (error) { tooLargeError = error.message; }
+      assert(tooLargeError.includes("5 MiB"), "IndexedDB rejects source one byte above the limit without truncating it");
 
       const imported = "raise RuntimeError('must not run on import')\n";
       const validFile = new win.DataTransfer();
@@ -234,7 +242,7 @@
       assert(!frame.contentDocument.querySelector("#run").disabled, "invalid project route leaves a usable starter editor");
 
       const recoverySource = "print('recovered in this browser')\n";
-      assert(store.writeRecovery(recoverySource), "recovery draft writes to local storage");
+      assert(await store.writeRecovery(recoverySource), "recovery draft writes to IndexedDB");
       await navigate("game-studio.html?new=1");
       await waitFor(() => !frame.contentDocument.querySelector("#restore-draft").hidden, "optional recovery prompt");
       assert(editor().value !== recoverySource, "recovery does not silently replace the starter");

@@ -14,6 +14,17 @@
 
     <section class="section studio-demo" aria-labelledby="sample-title">
       <div class="section-heading"><div><p class="eyebrow">PYTHON / PYGAME</p><h2 id="sample-title"><span id="project-title">New game</span><span class="heading-dot">.</span></h2><p class="section-intro">Your code autosaves in this browser after you save the game once.</p></div><a class="text-link" href="./site-assets/game-studio-sample.py" download>Download sample source <span aria-hidden="true">↓</span></a></div>
+      <section id="submission-edit-panel" class="submission-edit-panel" aria-labelledby="submission-edit-title" hidden>
+        <div><p class="eyebrow">SUBMISSION REVISION</p><h3 id="submission-edit-title">Edit submitted game</h3><p id="submission-edit-state" role="status">This copy is separate from your local saved games.</p></div>
+        <label for="submission-edit-title-input">Game title</label><input id="submission-edit-title-input" maxlength="100" required>
+        <label for="submission-edit-description">Description</label><textarea id="submission-edit-description" rows="3" maxlength="2000" required></textarea>
+        <label for="submission-edit-controls">Controls</label><textarea id="submission-edit-controls" rows="2" maxlength="1000" required></textarea>
+        <label for="submission-edit-cover">Replace cover image <span class="field-help">Optional · PNG, JPEG, or WebP, up to 3 MiB</span></label><input id="submission-edit-cover" type="file" accept="image/png,image/jpeg,image/webp">
+        <img id="submission-edit-cover-preview" class="submission-cover-preview" alt="Submission cover image preview" hidden>
+        <button id="submission-edit-cover-remove" class="button button-secondary button-small" type="button" hidden>Remove cover image</button>
+        <button id="update-submission" class="button button-primary" type="button">Update Submission</button>
+        <p id="submission-edit-message" class="submission-message" role="status" aria-live="polite"></p>
+      </section>
       <div class="studio-workspace">
         <section class="studio-panel" aria-labelledby="source-heading">
           <div class="studio-panel-heading"><div><p class="eyebrow">PYTHON / EDITOR</p><h3 id="source-heading">Game source</h3></div><span class="read-only-tag">AUTOSAVE</span></div>

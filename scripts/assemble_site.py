@@ -32,8 +32,8 @@ def build_game_studio_runtime(root, staged_site):
         raise SystemExit(f"Game Studio runtime input is missing: {missing[0]}")
 
     sample = sample_path.read_text(encoding="utf-8")
-    if len(sample.encode("utf-8")) > 102400:
-        raise SystemExit("The approved Game Studio sample exceeds the 100 KiB source limit.")
+    if len(sample.encode("utf-8")) > 5242880:
+        raise SystemExit("The approved Game Studio sample exceeds the 5 MiB source limit.")
 
     template = sandbox_template.read_text(encoding="utf-8")
     marker = "const PUBLIC_DEMO_BUNDLE = null;"

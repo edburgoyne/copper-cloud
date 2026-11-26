@@ -15,6 +15,8 @@ const authApi = fs.readFileSync(path.join(__dirname, "../site-assets/auth.js"), 
 const submissionPage = fs.readFileSync(path.join(__dirname, "../my-games.html"), "utf8");
 const submissionUi = fs.readFileSync(path.join(__dirname, "../site-assets/submission-ui.js"), "utf8");
 const submissionApi = fs.readFileSync(path.join(__dirname, "../site-assets/submissions.js"), "utf8");
+const reviewerUi = fs.readFileSync(path.join(__dirname, "../site-assets/review-submissions.js"), "utf8");
+const projectStore = fs.readFileSync(path.join(__dirname, "../site-assets/project-store.js"), "utf8");
 const games = [
   { id: "dino", title: "Dino Runner", category: "Arcade", description: "Jump over cacti", creator: "Cloud", controls: ["Space: jump"], aspect_ratio: [800, 400], featured: true, thumbnail: "./dino.svg", thumbnail_alt: "A dinosaur", page_url: "./play.html?game=dino", url: "./games/live_games/dino/" },
   { id: "battle", title: "Battle Royale", category: "Action", description: "Survive the storm", creator: "Cloud", controls: ["WASD: move"], aspect_ratio: [900, 600], featured: false, thumbnail: "./battle.svg", thumbnail_alt: "An arena", page_url: "./play.html?game=battle", url: "./games/live_games/battle/" },
@@ -173,7 +175,7 @@ test("Game Studio is discoverable and exposes saved project controls", () => {
 });
 
 test("shared auth navigation is initialized on every site page and uses profiles for usernames", () => {
-  for (const filename of ["index.html", "games.html", "play.html", "create.html", "about.html", "game-studio.html", "my-games.html", "auth.html", "account.html", "forgot-password.html", "reset-password.html"]) {
+  for (const filename of ["index.html", "games.html", "play.html", "create.html", "about.html", "game-studio.html", "my-games.html", "review-submissions.html", "auth.html", "account.html", "forgot-password.html", "reset-password.html"]) {
     const page = fs.readFileSync(path.join(__dirname, `../${filename}`), "utf8");
     assert.match(page, /id="auth-nav"/);
     assert.match(page, /site-assets\/auth-ui\.js/);
@@ -188,6 +190,9 @@ test("shared auth navigation is initialized on every site page and uses profiles
   assert.match(authUi, /Sign Up/);
   assert.match(authUi, /Account/);
   assert.match(authUi, /Log Out/);
+  assert.match(authUi, /\["admin", "super_admin"\]\.includes\(data\.role\)/);
+  assert.match(authUi, /renderVersion/);
+  assert.match(authUi, /review-submissions\.html/);
 });
 
 test("auth navigation is not connected to Game Studio worker or iframe messaging", () => {
@@ -210,10 +215,24 @@ test("submission frontend uses the existing authenticated RPCs and preserves the
   for (const marker of ['id="submission-project"', 'id="submission-title"', 'id="submission-description"', 'id="submission-controls"', 'id="submissions-grid"']) {
     assert.ok(submissionPage.includes(marker), `submission page includes ${marker}`);
   }
-  assert.match(submissionApi, /client\.rpc\("submit_game",\s*\{[\s\S]*p_title:[\s\S]*p_description:[\s\S]*p_controls:[\s\S]*p_source_code:/);
+  assert.match(submissionApi, /client\.rpc\("submit_game",\s*\{[\s\S]*p_title:[\s\S]*p_description:[\s\S]*p_controls:[\s\S]*p_source_code:[\s\S]*p_cover_image_path:/);
   assert.match(submissionApi, /\.eq\("user_id", userId\)/);
   assert.match(submissionApi, /client\.rpc\("get_submission_feedback"/);
-  assert.match(submissionUi, /localStorage\.setItem\(DRAFT_KEY/);
+  assert.match(submissionUi, /writeSubmissionDraft\(DRAFT_ID/);
   assert.match(submissionUi, /auth\.safeReturnUrl|auth\.getSession\(\)/);
   assert.match(submissionUi, /changes_requested:[\s\S]*approved:[\s\S]*rejected:/);
+  assert.match(submissionPage, /id="submission-cover"/);
+  assert.match(submissionUi, /Edit Submission/);
+  assert.match(submissionApi, /client\.rpc\("edit_submission"/);
+  assert.match(projectStore, /MAX_SOURCE_BYTES = 5 \* 1024 \* 1024/);
+  assert.match(projectStore, /createObjectStore\(DRAFTS_STORE/);
+  assert.match(reviewerUi, /p_decision: decision/);
+  assert.match(reviewerUi, /textContent = "Reject game"/);
+  assert.match(reviewerUi, /p_recommendation: recommendation/);
+  assert.match(reviewerUi, /textContent = "Reject game"/);
+  assert.match(reviewerUi, /p_decision: decision/);
+  assert.match(submissionApi, /MAX_SOURCE_BYTES = 5 \* 1024 \* 1024/);
+  assert.match(submissionApi, /MAX_COVER_BYTES = 3 \* 1024 \* 1024/);
+  assert.match(submissionPage, /accept="image\/png,image\/jpeg,image\/webp"/);
+  assert.match(submissionUi, /editSubmission=/);
 });

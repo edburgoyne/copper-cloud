@@ -1,19 +1,28 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><title>Submission review browser checks</title></head>
+<html lang="en"><head><meta charset="utf-8"><link rel="icon" href="../site-assets/favicon.svg"><title>Submission review browser checks</title></head>
 <body>
   <pre id="results">RUNNING</pre>
   <section id="review-access-message" hidden></section>
   <section id="review-content" hidden><span id="review-count"></span><p id="review-action-summary" hidden></p><p id="review-message" hidden></p><div id="review-list"></div></section>
   <script>
     const fake = {
-      session: { user: { id: "admin-1" } }, roleById: { "admin-1": "admin", "super-1": "super_admin", "student-1": "player" },
+      session: { user: { id: "admin-1" } }, roleById: { "admin-1": "admin", "super-1": "super_admin", "super-2": "super_admin", "student-1": "player" },
       submissions: [{ id: "submission-1", user_id: "student-1", title: "Read-only test", description: "A small game", controls: "Arrow keys", source_code: "print('safe source')", status: "submitted", created_at: new Date().toISOString(), updated_at: new Date().toISOString() }],
       events: [{ event_type: "approval_recommended", details: { feedback: "Looks good." }, created_at: new Date().toISOString() }], calls: [], listeners: [],
       auth: {
         getSession: async () => ({ data: { session: fake.session }, error: null }),
         onAuthStateChange: (callback) => { fake.listeners.push(callback); return { data: { subscription: { unsubscribe() {} } } }; },
       },
-      rpc: async (name, args) => { fake.calls.push({ name, args }); return { data: null, error: null }; },
+      rpc: async (name, args) => {
+        fake.calls.push({ name, args });
+        const row = fake.submissions.find((item) => item.id === args.p_submission_id);
+        if (row && name === "review_submission") {
+          row.status = args.p_recommendation === "request_changes" ? "changes_requested" : "under_review";
+          fake.events.unshift({ event_type: args.p_recommendation === "approve" ? "approval_recommended" : args.p_recommendation === "reject" ? "rejection_recommended" : "changes_requested", details: { feedback: args.p_feedback }, created_at: new Date().toISOString() });
+        }
+        if (row && name === "decide_submission") row.status = args.p_decision === "approve" ? "approved" : "rejected";
+        return { data: null, error: null };
+      },
       from(table) {
         const filters = {};
         const query = {
@@ -52,16 +61,33 @@
 
       fake.session = { user: { id: "super-1" } };
       for (const callback of fake.listeners) callback("SIGNED_IN", fake.session);
-      await waitFor(() => document.querySelector(".review-history") && document.querySelector(".review-card button")?.textContent === "Approve game", "super-admin final decision controls");
+      await waitFor(() => document.querySelector(".review-history") && document.querySelector(".review-final-form button[value=approve]"), "super-admin final decision controls");
       const superCard = document.querySelector(".review-card");
-      assert(superCard.textContent.includes("Looks good.") && !superCard.querySelector('button[value="approve"]'), "super-admin can read recommendation history and has no recommendation controls");
-      superCard.querySelector("textarea").value = "Approved for manual repository addition.";
+      assert(superCard.textContent.includes("Looks good.") && superCard.querySelector('.review-recommendation-form button[value="approve"]').textContent === "Recommend approval" && superCard.querySelector('.review-final-form button[value="approve"]').textContent === "Approve game", "super-admin sees recommendation history and clearly distinct recommendation and final approval actions");
+      const recommendField = superCard.querySelector(".review-recommendation-form textarea");
+      recommendField.value = "Please add a clearer start screen.";
+      superCard.querySelector('button[value="request_changes"]').click();
+      await waitFor(() => fake.calls.some((call) => call.name === "review_submission" && call.args.p_recommendation === "request_changes" && call.args.p_feedback === "Please add a clearer start screen."), "super-admin request changes RPC");
+      assert(fake.calls.some((call) => call.name === "review_submission" && call.args.p_recommendation === "request_changes"), "super-admin can use regular reviewer actions");
+      await waitFor(() => document.querySelector(".review-card .review-final-form"), "refreshed super-admin card after recommendation");
+      const approveCard = [...document.querySelectorAll(".review-card")].find((item) => item.dataset.submissionId === "submission-1");
+      approveCard.querySelector(".review-final-form textarea").value = "Approved for manual repository addition.";
       const confirmOriginal = window.confirm; window.confirm = () => true;
-      superCard.querySelector("button").click(); window.confirm = confirmOriginal;
+      approveCard.querySelector('.review-final-form button[value="approve"]').click(); window.confirm = confirmOriginal;
       await waitFor(() => fake.calls.some((call) => call.name === "decide_submission"), "final approval RPC");
       const decision = fake.calls.find((call) => call.name === "decide_submission");
       assert(decision.args.p_submission_id === "submission-1" && decision.args.p_decision === "approve" && decision.args.p_feedback === "Approved for manual repository addition.", "super-admin approval sends required feedback and approved decision");
       assert(!fake.calls.some((call) => call.name.toLowerCase().includes("publish") || call.name.toLowerCase().includes("game_add")), "approval does not publish or add a game");
+
+      fake.submissions.push({ ...fake.submissions[0], id: "submission-2", title: "Reject test", status: "under_review" });
+      fake.session = { user: { id: "super-2" } };
+      for (const callback of fake.listeners) callback("SIGNED_IN", fake.session);
+      await waitFor(() => document.querySelectorAll(".review-card").length === 1, "second open submission");
+      const rejectCard = document.querySelector(".review-card");
+      rejectCard.querySelector(".review-final-form textarea").value = "Please revise and submit a new version.";
+      rejectCard.querySelector('.review-final-form button[value="reject"]').click();
+      await waitFor(() => fake.calls.some((call) => call.name === "decide_submission" && call.args.p_decision === "reject"), "final rejection RPC");
+      assert(fake.calls.some((call) => call.name === "decide_submission" && call.args.p_decision === "reject" && call.args.p_feedback === "Please revise and submit a new version."), "super-admin rejection requires and sends a final note");
 
       fake.session = { user: { id: "student-1" } };
       for (const callback of fake.listeners) callback("SIGNED_IN", fake.session);

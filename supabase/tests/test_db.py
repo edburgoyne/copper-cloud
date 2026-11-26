@@ -1,11 +1,13 @@
 """Integration tests for the local Copper Cloud Supabase baseline."""
 
 import json
+import base64
 import os
 import threading
 import unittest
 import urllib.error
 import urllib.request
+from urllib.parse import quote
 import uuid
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
@@ -83,6 +85,29 @@ class SupabaseDatabaseTests(unittest.TestCase):
     def rpc(self, user, name, body):
         return api(f"{self.api_base}/rpc/{name}", body, user.get("token") if user else None)
 
+    def storage_request(self, user, path, payload=None, mime="application/octet-stream", method="POST"):
+        request = urllib.request.Request(
+            f"{BASE_URL}/storage/v1/{path}",
+            data=payload,
+            method=method,
+            headers={
+                "apikey": ANON_KEY,
+                "Authorization": f"Bearer {user.get('token') if user else ANON_KEY}",
+                "Content-Type": mime,
+            },
+        )
+        try:
+            with urllib.request.urlopen(request) as response:
+                result = response.read()
+                return response.status, json.loads(result) if result else None
+        except urllib.error.HTTPError as error:
+            result = error.read()
+            try:
+                body = json.loads(result)
+            except ValueError:
+                body = {"message": result.decode(errors="replace")}
+            return error.code, body
+
     def submit(self, user, **overrides):
         values = VALID | overrides
         status, data = self.rpc(user, "submit_game", values)
@@ -134,12 +159,16 @@ class SupabaseDatabaseTests(unittest.TestCase):
               has_function_privilege('anon','public.change_username(text)','EXECUTE'),
               has_function_privilege('authenticated','public.edit_submission(uuid,text,text,text,text)','EXECUTE'),
               has_function_privilege('anon','public.edit_submission(uuid,text,text,text,text)','EXECUTE'),
+              has_function_privilege('authenticated','public.submit_game(text,text,text,text,text)','EXECUTE'),
+              has_function_privilege('anon','public.submit_game(text,text,text,text,text)','EXECUTE'),
+              has_function_privilege('authenticated','public.edit_submission(uuid,text,text,text,text,text,boolean)','EXECUTE'),
+              has_function_privilege('anon','public.edit_submission(uuid,text,text,text,text,text,boolean)','EXECUTE'),
               has_function_privilege('authenticated','public.review_submission(uuid,text,text)','EXECUTE'),
               has_function_privilege('anon','public.review_submission(uuid,text,text)','EXECUTE'),
               has_function_privilege('authenticated','public.get_submission_feedback(uuid)','EXECUTE'),
               has_function_privilege('anon','public.get_submission_feedback(uuid)','EXECUTE')
         """)[0]
-        self.assertEqual(rpc_grants, (True, False, True, False, True, False, True, False))
+        self.assertEqual(rpc_grants, (True, False, True, False, True, False, True, False, True, False, True, False))
 
     def test_signup_profile_username_rules_and_casefold_uniqueness(self):
         player = self.account()
@@ -179,12 +208,75 @@ class SupabaseDatabaseTests(unittest.TestCase):
             ({"p_controls"}, "", "controls"),
             ({"p_controls"}, "c" * 1001, "controls"),
             ({"p_source_code"}, "", "source"),
-            ({"p_source_code"}, "x" * 102401, "source"),
+            ({"p_source_code"}, "x" * 5242881, "source"),
         ]:
             body = VALID.copy()
             body[next(iter(fields))] = value
             status, data = self.rpc(player, "submit_game", body)
             self.assertGreaterEqual(status, 400, data)
+
+    def test_submission_source_limit_accepts_exactly_5_mib_for_submit_and_edit(self):
+        player = self.account()
+        exact_limit = "x" * 5242880
+        submission_id = self.create_submission(player, p_source_code=exact_limit)
+        self.assertEqual(self.sql("SELECT octet_length(source_code) FROM public.game_submissions WHERE id=%s", (submission_id,))[0][0], 5242880)
+        update = {
+            "p_submission_id": submission_id,
+            "p_title": VALID["p_title"],
+            "p_description": VALID["p_description"],
+            "p_controls": VALID["p_controls"],
+            "p_source_code": exact_limit,
+        }
+        self.assertEqual(self.rpc(player, "edit_submission", update)[0], 204)
+        self.assertGreaterEqual(self.rpc(player, "edit_submission", update | {"p_source_code": "x" * 5242881})[0], 400)
+
+    def test_private_cover_upload_submission_and_reviewer_access(self):
+        player, other, reviewer = self.account(), self.account(), self.account("admin")
+        image = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j5ZsAAAAASUVORK5CYII=")
+        object_id = str(uuid.uuid4())
+        path = f"{player['id']}/{object_id}.png"
+        status, result = self.storage_request(player, f"object/submission-covers/{quote(path)}", image, "image/png")
+        self.assertIn(status, (200, 201), result)
+        submission = self.create_submission_with_cover(player, path)
+        self.assertEqual(self.sql("SELECT cover_image_path FROM public.game_submissions WHERE id=%s", (submission,))[0][0], path)
+
+        unchanged = VALID | {"p_submission_id": submission, "p_title": "Cover Test Updated"}
+        self.assertEqual(self.rpc(player, "edit_submission", unchanged)[0], 204)
+        self.assertEqual(self.sql("SELECT cover_image_path FROM public.game_submissions WHERE id=%s", (submission,))[0][0], path)
+
+        sign_path = f"object/sign/submission-covers/{quote(path)}"
+        self.assertLess(self.storage_request(player, sign_path, json.dumps({"expiresIn": 60}).encode(), "application/json")[0], 400)
+        self.assertLess(self.storage_request(reviewer, sign_path, json.dumps({"expiresIn": 60}).encode(), "application/json")[0], 400)
+        self.assertGreaterEqual(self.storage_request(other, sign_path, json.dumps({"expiresIn": 60}).encode(), "application/json")[0], 400)
+
+        bad_path = f"{other['id']}/{uuid.uuid4()}.png"
+        self.assertGreaterEqual(self.storage_request(other, f"object/submission-covers/{quote(bad_path)}", image, "image/svg+xml")[0], 400)
+        oversized_path = f"{player['id']}/{uuid.uuid4()}.png"
+        self.assertGreaterEqual(self.storage_request(player, f"object/submission-covers/{quote(oversized_path)}", b"x" * (3 * 1024 * 1024 + 1), "image/png")[0], 400)
+
+        replacement = f"{player['id']}/{uuid.uuid4()}.png"
+        self.assertIn(self.storage_request(player, f"object/submission-covers/{quote(replacement)}", image, "image/png")[0], (200, 201))
+        edit_with_cover = {
+            "p_submission_id": submission,
+            "p_title": "Cover Test Updated",
+            "p_description": VALID["p_description"],
+            "p_controls": VALID["p_controls"],
+            "p_source_code": VALID["p_source_code"],
+            "p_cover_image_path": replacement,
+            "p_remove_cover": False,
+        }
+        self.assertGreaterEqual(self.rpc(other, "edit_submission", edit_with_cover)[0], 400)
+        self.assertEqual(self.rpc(player, "edit_submission", edit_with_cover)[0], 200)
+        self.assertEqual(self.sql("SELECT cover_image_path FROM public.game_submissions WHERE id=%s", (submission,))[0][0], replacement)
+        self.assertEqual(self.rpc(player, "edit_submission", edit_with_cover | {"p_cover_image_path": None, "p_remove_cover": True})[0], 200)
+        self.assertIsNone(self.sql("SELECT cover_image_path FROM public.game_submissions WHERE id=%s", (submission,))[0][0])
+        self.assertIn(self.storage_request(player, f"object/submission-covers/{quote(replacement)}", None, method="DELETE")[0], (200, 204))
+
+    def create_submission_with_cover(self, user, path):
+        values = VALID | {"p_cover_image_path": path}
+        status, data = self.rpc(user, "submit_game", values)
+        self.assertEqual(status, 200, data)
+        return data
 
     def test_three_open_submission_limit_and_closed_slot_reuse(self):
         player, super_admin = self.account(), self.account("super_admin")
